@@ -51,17 +51,17 @@
   --radius-md: 16px;
   --radius-sm: 10px;
 
-  /* 间距 — vw 单位（移动端优先） */
-  --space-xs: 2vw;
-  --space-sm: 4vw;
-  --space-md: 6vw;
+  /* 间距 */
+  --space-xs: 8px;
+  --space-sm: 16px;
+  --space-md: 24px;
 
-  /* 字号 — vw 单位 */
-  --font-xs: 3.2vw;
-  --font-sm: 4vw;
-  --font-base: 4.5vw;
-  --font-lg: 5.5vw;
-  --font-xl: 7vw;
+  /* 字号 — 移动端 vw / 桌面 px */
+  --font-xs: 13px;
+  --font-sm: 16px;
+  --font-base: 18px;
+  --font-lg: 24px;
+  --font-xl: 32px;
 
   /* 阴影 — 仿 mimi */
   --shadow-sm: 0 2px 8px rgba(0,0,0,0.15);
@@ -154,13 +154,13 @@ a { color: var(--accent); text-decoration: none; }
 }
 
 /* ================================================================
-   响应式
+   响应式 — 手机用小字
    ================================================================ */
-@media (min-width: 768px) {
+@media (max-width: 480px) {
   :root {
-    --font-xs: 14px; --font-sm: 16px; --font-base: 18px;
-    --font-lg: 24px; --font-xl: 32px;
-    --space-xs: 8px; --space-sm: 16px; --space-md: 24px;
+    --font-xs: 3.2vw; --font-sm: 4vw; --font-base: 4.5vw;
+    --font-lg: 5.5vw; --font-xl: 7vw;
+    --space-xs: 2vw; --space-sm: 4vw; --space-md: 6vw;
   }
 }
 @media (max-width: 360px) {
