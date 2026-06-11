@@ -33,7 +33,7 @@ async function goHome() { await store.autoSave(); store.phase = 'start' }
 <style scoped>
 .game {
   display: flex; flex-direction: column; height: 100vh;
-  background: url('/splash-bg.png') center/cover no-repeat;
+  background: url('/bg.jpg') center/cover no-repeat;
   position: relative; overflow: hidden;
 }
 
