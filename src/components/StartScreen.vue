@@ -65,7 +65,7 @@ function handleSettings() { emit('openSettings') }
 
 <style scoped>
 .start-screen { height: 100vh; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
-.bg-base { position: fixed; inset: 0; z-index: -4; background: rgba(8,14,24,0.5); }
+.bg-base { position: fixed; inset: 0; z-index: -4; background: rgba(8,14,24,0.2); }
 .bg-orbs { position: fixed; inset: 0; z-index: -3; pointer-events: none; overflow: hidden; }
 .orb { position: absolute; border-radius: 50%; filter: blur(80px); animation: orb-pulse 8s ease-in-out infinite; }
 .orb-cyan  { width: 400px; height: 400px; top: 10%; right: 15%; background: rgba(0,229,255,0.08); }

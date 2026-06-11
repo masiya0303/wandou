@@ -170,7 +170,7 @@ async function goBack() {
 
 <style scoped>
 .screen { height: 100vh; position: relative; overflow-y: auto; overflow-x: hidden; }
-.bg-base { position: fixed; inset: 0; z-index: -4; background: rgba(8,14,24,0.5); }
+.bg-base { position: fixed; inset: 0; z-index: -4; background: rgba(8,14,24,0.2); }
 .container { position: relative; z-index: 1; max-width: 640px; width: 100%; margin: 0 auto; padding: 1rem 1.2rem 2rem; display: flex; flex-direction: column; gap: 0.6rem; }
 
 .top { display: flex; align-items: center; justify-content: space-between; }

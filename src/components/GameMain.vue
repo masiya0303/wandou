@@ -33,7 +33,7 @@ async function goHome() { await store.autoSave(); store.phase = 'start' }
 <style scoped>
 .game {
   display: flex; flex-direction: column; height: 100vh;
-  background: rgba(8,14,24,0.5);
+  background: rgba(8,14,24,0.2);
   position: relative; overflow: hidden;
 }
 
@@ -41,7 +41,7 @@ async function goHome() { await store.autoSave(); store.phase = 'start' }
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 14px; height: 44px; flex-shrink: 0; z-index: 20;
   border-bottom: 1px solid var(--border);
-  background: rgba(8,14,24,0.95);
+  background: rgba(8,14,24,0.75);
 }
 .bar-left, .bar-right { display: flex; align-items: center; gap: 8px; }
 .bar-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
