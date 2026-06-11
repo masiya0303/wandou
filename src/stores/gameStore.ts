@@ -224,11 +224,14 @@ export const useGameStore = defineStore('game', () => {
   async function _loadWorld(id: string): Promise<boolean> {
     console.log(`[Load] 加载世界 id=${id}`)
     try {
-      let data = await db.getWorld(id)
-      let source = 'IndexedDB'
-      if (!data) {
-        const raw = localStorage.getItem(LOCAL_KEY_PREFIX + id)
-        if (raw) { data = JSON.parse(raw); source = 'localStorage' }
+      // localStorage 先查（proot IndexedDB 可能不持久）, IndexedDB 再查
+      let data: any = null
+      let source = ''
+      const raw = localStorage.getItem(LOCAL_KEY_PREFIX + id)
+      if (raw) { data = JSON.parse(raw); source = 'localStorage' }
+      if (!data || !data.world) {
+        const idb = await db.getWorld(id)
+        if (idb) { data = idb; source = 'IndexedDB' }
       }
       if (!data?.world) { console.log('[Load] ❌ 未找到世界数据'); return false }
       const w = data.world as World
@@ -417,7 +420,7 @@ export const useGameStore = defineStore('game', () => {
       const fullPrompt = buildFullSystemPrompt()
       const fullContent = await chatStream(apiConfig.value, fullPrompt, messages.value.slice(0, -1), (chunk) => { aiMsg.content += chunk })
       aiMsg.content = fullContent
-      autoSave()
+      await autoSave()
     } catch (e: any) {
       error.value = e.message || '请求失败'
       messages.value = messages.value.filter(m => m.id !== aiMsg.id)
@@ -461,9 +464,13 @@ export const useGameStore = defineStore('game', () => {
   }
 
   // ============ 开始游戏 ============
-  function startPlaying() {
+  async function startPlaying() {
     if (!isApiReady.value || !character.value.name.trim()) return
     phase.value = 'playing'
+
+    // 同步写 localStorage（beforeunload 兜底 + proot IndexedDB 不可靠）
+    syncSave()
+
     const welcome: GameMessage = {
       id: `system-${Date.now()}`, role: 'assistant',
       content: `【世界「${worldName.value}」加载完成】
@@ -474,6 +481,7 @@ ${worldDescription.value ? worldDescription.value.slice(0, 200) + '...' : ''}
       timestamp: Date.now(),
     }
     addMessage(welcome)
+    // 异步 IndexedDB 存档，不阻塞 UI
     autoSave()
   }
 
