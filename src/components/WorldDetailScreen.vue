@@ -27,20 +27,17 @@ const charFileInput = ref<HTMLInputElement | null>(null)
 
 function importPlayerChar() {
   if (!charImportText.value.trim()) return
-  try {
-    const raw = JSON.parse(charImportText.value)
-    const src = raw.data || raw // ST 角色卡兼容
-    if (src.name && !charName.value) charName.value = src.name
-    if (src.description && !charBg.value) {
-      charBg.value = src.description.slice(0, 500)
-    }
-    if (src.personality && !charBg.value) charBg.value = src.personality.slice(0, 500)
-    if (src.creator_notes) charBg.value = (charBg.value + '\n' + src.creator_notes).trim()
-    if (src.age) charAge.value = parseInt(String(src.age)) || 25
-    if (src.gender || src.sex) charGender.value = src.gender || src.sex || ''
+  const r = importNpcJson(charImportText.value)
+  if (r.success && r.entries.length > 0) {
+    const npc = r.entries[0]
+    if (npc.name && !charName.value) charName.value = npc.name
+    if (npc.personality && !charBg.value) charBg.value = npc.personality.slice(0, 500)
+    if (npc.appearance) charBg.value = (charBg.value + '\n外貌: ' + npc.appearance).trim()
+    if (npc.background) charBg.value = (charBg.value + '\n' + npc.background).trim()
+    if (npc.scenario) charBg.value = (charBg.value + '\n场景: ' + npc.scenario).trim()
     charImportText.value = ''
     showCharImport.value = false
-  } catch { error.value = 'JSON 解析失败' }
+  }
 }
 function onCharFile(e: Event) {
   const input = e.target as HTMLInputElement; const file = input.files?.[0]; if (!file) return
