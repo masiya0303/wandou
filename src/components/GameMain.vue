@@ -9,6 +9,11 @@ import InputBar from './InputBar.vue'
 
 const store = useGameStore()
 const emit = defineEmits<{ openSettings: [] }>()
+
+async function goHome() {
+  await store.autoSave()
+  store.phase = 'start'
+}
 </script>
 
 <template>
@@ -42,9 +47,9 @@ const emit = defineEmits<{ openSettings: [] }>()
           <span class="crew-cn">👨‍🚀 {{ store.character.name || '舰长' }}</span>
           <span class="crew-en">CAPTAIN</span>
         </span>
-        <button class="btn-icon glass-panel" title="世界管理 · WORLD" @click="store.openWorldDetail(store.currentWorldId!)">📋</button>
+        <button class="btn-icon glass-panel" title="世界管理 · WORLD" @click="store.goToWorldDetail()">📋</button>
         <button class="btn-icon glass-panel" title="设置 · SETTINGS" @click="emit('openSettings')">⚙️</button>
-        <button class="btn-icon glass-panel" title="返回主菜单 · HOME" @click="store.phase = 'start'">🏠</button>
+        <button class="btn-icon glass-panel" title="返回主菜单 · HOME" @click="goHome()">🏠</button>
       </div>
     </header>
 

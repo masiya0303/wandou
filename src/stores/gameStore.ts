@@ -169,7 +169,7 @@ export const useGameStore = defineStore('game', () => {
       id: currentWorldId.value,
       name: worldName.value,
       description: worldDescription.value,
-      createdAt: 0, // will be preserved from existing
+      createdAt: 0,
       updatedAt: Date.now(),
       character: { ...character.value },
       npcs: [...npcs.value],
@@ -177,11 +177,12 @@ export const useGameStore = defineStore('game', () => {
       worldBook: [...worldBook.value],
       worldBookEnabled: worldBookEnabled.value,
     }
+    console.log(`[Save] 保存世界: name="${world.name}" npcs=${world.npcs.length} wb=${world.worldBook.length} msgs=${world.messages.length}`)
     try {
-      // 保留 createdAt
       const existing = await db.getWorld(currentWorldId.value)
       if (existing?.world?.createdAt) world.createdAt = existing.world.createdAt
       await db.putWorld({ id: world.id, world, apiConfig: { ...apiConfig.value } })
+      console.log(`[Save] ✅ IndexedDB 保存成功 id=${world.id}`)
       // 更新世界列表元数据
       const idx = worldList.value.findIndex(w => w.id === world.id)
       const meta: WorldMeta = {
@@ -221,14 +222,17 @@ export const useGameStore = defineStore('game', () => {
   }
 
   async function _loadWorld(id: string): Promise<boolean> {
+    console.log(`[Load] 加载世界 id=${id}`)
     try {
       let data = await db.getWorld(id)
+      let source = 'IndexedDB'
       if (!data) {
         const raw = localStorage.getItem(LOCAL_KEY_PREFIX + id)
-        if (raw) data = JSON.parse(raw)
+        if (raw) { data = JSON.parse(raw); source = 'localStorage' }
       }
-      if (!data?.world) return false
+      if (!data?.world) { console.log('[Load] ❌ 未找到世界数据'); return false }
       const w = data.world as World
+      console.log(`[Load] ✅ ${source}: name="${w.name}" npcs=${w.npcs?.length||0} wb=${w.worldBook?.length||0} msgs=${w.messages?.length||0}`)
       currentWorldId.value = w.id
       worldName.value = w.name
       worldDescription.value = w.description
@@ -239,7 +243,7 @@ export const useGameStore = defineStore('game', () => {
       worldBookEnabled.value = w.worldBookEnabled !== false
       if (data.apiConfig?.apiKey) apiConfig.value = data.apiConfig
       return true
-    } catch { return false }
+    } catch (e) { console.error('[Load] ❌ 加载异常:', e); return false }
   }
 
   // ============ 世界 CRUD ============
@@ -270,7 +274,14 @@ export const useGameStore = defineStore('game', () => {
     return id
   }
 
-  async function openWorldDetail(id: string): Promise<boolean> {
+  function goToWorldDetail() {
+    // 从游戏内进入世界详情 — 不重新加载，用内存数据
+    previousPhase.value = phase.value
+    phase.value = 'worldDetail'
+  }
+
+  async function openWorldDetailFromList(id: string): Promise<boolean> {
+    // 从世界列表进入 — 从存储加载
     previousPhase.value = phase.value
     const ok = await _loadWorld(id)
     if (ok) phase.value = 'worldDetail'
@@ -492,7 +503,7 @@ ${worldDescription.value ? worldDescription.value.slice(0, 200) + '...' : ''}
     globalEnabledEntries, worldEnabledEntries, enabledNpcs,
 
     initStore,
-    createWorld, openWorldDetail, enterWorld, deleteWorld, updateWorldInfo,
+    createWorld, openWorldDetailFromList, goToWorldDetail, enterWorld, deleteWorld, updateWorldInfo,
     addNpcEntries, removeNpc, toggleNpc, importNpcsFromJson,
     addGlobalWorldBookEntries, removeGlobalWorldBookEntry, toggleGlobalWorldBookEntry, resetGlobalWorldBook,
     addWorldBookEntries, removeWorldBookEntry, toggleWorldBookEntry, resetWorldBook,
