@@ -1,15 +1,13 @@
-/*
- * wandou — 暗色科幻 · 纯净 CSS
- */
+/* ============================================================
+ wandou — 暗色科幻
+============================================================ */
 
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; outline: none; }
 
 :root {
   /* 背景 */
-  --bg-primary: #3A516B;
-
-  /* 边框 */
-  --border: #113159;
+  --bg-primary: #080e18;
+  --border: #1c3350;
 
   /* 文字 */
   --text-primary: #e0e8ff;
@@ -54,6 +52,15 @@
   /* 渐变 */
   --gradient-accent: linear-gradient(90deg, transparent, var(--accent), transparent);
 
+  /* === bjd粉色主题 === */
+  --pink-primary: rgba(112, 88, 98, 0.81);
+  --pink-accent: #ff80a8;
+  --pink-light: #ffccdc;
+  --pink-ice: #ffe6ee;
+  --pink-italic: rgba(216, 120, 138, 1);
+  --pink-bubble-bg: linear-gradient(145deg, #ffffff, #ffe6f2);
+  --pink-input-bg: linear-gradient(180deg, #ffffff, #ffe6ee);
+
   font-family: 'Noto Sans SC', 'Roboto', system-ui, sans-serif;
   font-size: var(--font-base);
   line-height: 1.6;
@@ -71,7 +78,6 @@ html, body, #app { width: 100%; height: 100%; overflow: hidden; }
 
 :focus-visible { outline: 2px solid var(--accent-cyan); outline-offset: 2px; }
 
-/* 滚动条 */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
@@ -79,10 +85,7 @@ html, body, #app { width: 100%; height: 100%; overflow: hidden; }
 ::selection { background: rgba(34,211,238,0.25); color: #fff; }
 a { color: var(--accent); text-decoration: none; }
 
-/* ════════════════════════════════════════
-   工具类
-   ════════════════════════════════════════ */
-
+/* 工具类 */
 .glass-panel {
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
@@ -105,13 +108,17 @@ a { color: var(--accent); text-decoration: none; }
   width: 60%; max-width: 280px; height: 1px;
   margin: 0.5rem auto; background: var(--gradient-accent); border: none;
 }
-
 .glow-text { text-shadow: 0 0 24px var(--accent-cyan-glow); }
 
-/* ════════════════════════════════════════
-   动画
-   ════════════════════════════════════════ */
+/* 暗色玻璃面板变体（粉色） */
+.glass-pink {
+  background: var(--pink-bubble-bg);
+  border: 3px solid var(--pink-ice);
+  border-radius: 20px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
 
+/* 关键帧 */
 @keyframes twinkle { 0%,100%{opacity:.2} 50%{opacity:.9} }
 @keyframes scan-line { 0%{transform:translateX(-100%)} 100%{transform:translateX(200%)} }
 @keyframes glow-pulse { 0%,100%{text-shadow:0 0 16px rgba(34,211,238,.25)} 50%{text-shadow:0 0 32px rgba(34,211,238,.5),0 0 64px rgba(34,211,238,.2)} }
@@ -120,11 +127,7 @@ a { color: var(--accent); text-decoration: none; }
 @keyframes float-down { 0%{transform:translateY(-20px);opacity:0} 15%{opacity:.6} 85%{opacity:.4} 100%{transform:translateY(100vh);opacity:0} }
 @keyframes slide-up { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
 @keyframes orbit-spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
-@keyframes signal-pulse { 0%,100%{box-shadow:0 0 3px var(--accent-cyan-glow)} 50%{box-shadow:0 0 10px rgba(34,211,238,.6),0 0 20px rgba(34,211,238,.2)} }
-
-/* ════════════════════════════════════════
-   响应式
-   ════════════════════════════════════════ */
+@keyframes signal-pulse { 0%,100%{box-shadow:0 0 3px rgba(34,211,238,.4)} 50%{box-shadow:0 0 10px rgba(34,211,238,.6),0 0 20px rgba(34,211,238,.2)} }
 
 @media (max-width: 480px) {
   :root {
