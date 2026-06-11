@@ -142,7 +142,7 @@ function goBack() { page.value = null }
 <style scoped>
 /* ---- overlay ---- */
 .ss { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; overflow: hidden; background: var(--theme-chat-bg) center/cover no-repeat; }
-.ss::after { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: -1; background: radial-gradient(ellipse at 50% 50%, rgba(8,14,24,0.6) 0%, rgba(8,14,24,0.2) 65%, transparent 100%); }
+
 
 /* ---- home ---- */
 .ss-main { position: relative; z-index: 1; display: flex; flex-direction: column; height: 100%; padding: 16px; }
