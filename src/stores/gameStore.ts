@@ -1,13 +1,15 @@
 // ============================================================
-// wandou v0.1 — 豌豆星际漂流 · 游戏状态管理
+// wandou v0.2 — 豌豆星际漂流 · 游戏状态管理
 // ============================================================
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { ApiConfig, GameMessage, CharacterInfo, GameSave, GamePhase, SettingsTab } from '../types/game'
+import type { WorldBookEntry, ImportResult } from '../types/worldBook'
 import { chatStream } from '../utils/api'
+import { scanAndCollect, extractRecentText, importWorldBook, PRESET_WORLD_BOOK } from '../utils/worldBookEngine'
 
-const SAVE_KEY = 'wandou_save_v0.1'
+const SAVE_KEY = 'wandou_save_v0.2'
 
 // ---------- 默认值 ----------
 
@@ -62,11 +64,50 @@ export const useGameStore = defineStore('game', () => {
   const settingsTab = ref<SettingsTab>('api')
   const error = ref('')
 
+  // --- v0.2: 世界书 ---
+  const worldBook = ref<WorldBookEntry[]>(structuredClone(PRESET_WORLD_BOOK))
+  const worldBookEnabled = ref(true)
+
   // ---------- 计算属性 ----------
   const isApiReady = computed(() => !!apiConfig.value.apiKey && !!apiConfig.value.baseUrl)
   const isCharacterReady = computed(() => !!character.value.name.trim())
   const canStart = computed(() => isApiReady.value && isCharacterReady.value)
   const messageCount = computed(() => messages.value.length)
+  const enabledEntries = computed(() => worldBook.value.filter(e => e.enabled).length)
+
+  // ---------- 世界书 Prompt 注入 ----------
+  function buildWorldBookContext(): string {
+    if (!worldBookEnabled.value) return ''
+    const texts = extractRecentText(messages.value, 10)
+    return scanAndCollect(worldBook.value, texts, 2000)
+  }
+
+  // ---------- 世界书管理 ----------
+  function importWorldBookFromJson(jsonStr: string): ImportResult & { entries: WorldBookEntry[] } {
+    return importWorldBook(jsonStr)
+  }
+
+  function addWorldBookEntries(entries: WorldBookEntry[]) {
+    const existingIds = new Set(worldBook.value.map(e => e.id))
+    for (const entry of entries) {
+      if (!existingIds.has(entry.id)) {
+        worldBook.value.push(entry)
+      }
+    }
+  }
+
+  function removeWorldBookEntry(id: string) {
+    worldBook.value = worldBook.value.filter(e => e.id !== id)
+  }
+
+  function toggleWorldBookEntry(id: string) {
+    const entry = worldBook.value.find(e => e.id === id)
+    if (entry) entry.enabled = !entry.enabled
+  }
+
+  function resetWorldBook() {
+    worldBook.value = structuredClone(PRESET_WORLD_BOOK)
+  }
 
   // ---------- 消息操作 ----------
   function addMessage(msg: GameMessage) {
@@ -104,19 +145,23 @@ export const useGameStore = defineStore('game', () => {
     isGenerating.value = true
 
     try {
+      // v0.2: 注入世界书上下文
+      const wbContext = buildWorldBookContext()
+      const effectiveSystemPrompt = wbContext
+        ? systemPrompt.value + wbContext
+        : systemPrompt.value
+
       const fullContent = await chatStream(
         apiConfig.value,
-        systemPrompt.value,
+        effectiveSystemPrompt,
         messages.value.slice(0, -1), // 不包含空的 AI 占位
         (chunk) => {
-          // 流式更新最后一条消息
           aiMsg.content += chunk
         },
       )
       aiMsg.content = fullContent
     } catch (e: any) {
       error.value = e.message || '请求失败，请检查 API 配置'
-      // 移除失败的 AI 消息
       messages.value = messages.value.filter(m => m.id !== aiMsg.id)
     } finally {
       isGenerating.value = false
@@ -127,17 +172,15 @@ export const useGameStore = defineStore('game', () => {
   async function regenerate() {
     if (isGenerating.value) return
 
-    // 移除最后一条 AI 消息
     const lastMsg = messages.value[messages.value.length - 1]
     if (lastMsg?.role === 'assistant') {
       messages.value.pop()
     }
 
-    // 获取最后一条用户消息重新生成
     const lastUserMsg = messages.value[messages.value.length - 1]
     if (lastUserMsg?.role === 'user') {
       const userContent = lastUserMsg.content
-      messages.value.pop() // 移除用户消息
+      messages.value.pop()
       await sendMessage(userContent)
     }
   }
@@ -146,12 +189,14 @@ export const useGameStore = defineStore('game', () => {
   function saveToLocal(): boolean {
     try {
       const save: GameSave = {
-        version: '0.1',
+        version: '0.2',
         timestamp: Date.now(),
         character: { ...character.value },
         messages: [...messages.value],
         systemPrompt: systemPrompt.value,
         apiConfig: { ...apiConfig.value },
+        worldBook: [...worldBook.value],
+        worldBookEnabled: worldBookEnabled.value,
       }
       localStorage.setItem(SAVE_KEY, JSON.stringify(save))
       return true
@@ -169,6 +214,12 @@ export const useGameStore = defineStore('game', () => {
       messages.value = save.messages
       systemPrompt.value = save.systemPrompt
       apiConfig.value = save.apiConfig
+      if (save.worldBook) {
+        worldBook.value = save.worldBook
+      }
+      if (typeof save.worldBookEnabled === 'boolean') {
+        worldBookEnabled.value = save.worldBookEnabled
+      }
       return true
     } catch {
       return false
@@ -189,6 +240,8 @@ export const useGameStore = defineStore('game', () => {
     messages.value = []
     character.value = { ...DEFAULT_CHARACTER }
     systemPrompt.value = DEFAULT_SYSTEM_PROMPT
+    worldBook.value = structuredClone(PRESET_WORLD_BOOK)
+    worldBookEnabled.value = true
     error.value = ''
     isGenerating.value = false
   }
@@ -201,7 +254,6 @@ export const useGameStore = defineStore('game', () => {
   function startPlaying() {
     if (!canStart.value) return
     phase.value = 'playing'
-    // 发送开场白
     const welcomeMsg: GameMessage = {
       id: `system-${Date.now()}`,
       role: 'assistant',
@@ -240,17 +292,26 @@ export const useGameStore = defineStore('game', () => {
     isGenerating,
     settingsTab,
     error,
+    worldBook,
+    worldBookEnabled,
 
     // computed
     isApiReady,
     isCharacterReady,
     canStart,
     messageCount,
+    enabledEntries,
 
     // actions
     sendMessage,
     regenerate,
     clearMessages,
+    buildWorldBookContext,
+    importWorldBookFromJson,
+    addWorldBookEntries,
+    removeWorldBookEntry,
+    toggleWorldBookEntry,
+    resetWorldBook,
     saveToLocal,
     loadFromLocal,
     hasSave,

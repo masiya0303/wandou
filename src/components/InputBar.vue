@@ -96,13 +96,13 @@ function autoResize() {
   font-family: inherit;
   resize: none;
   line-height: 1.5;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .input-field:focus {
   outline: none;
   border-color: #4a90d9;
-  box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.15);
+  box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.15), 0 0 15px rgba(74, 144, 217, 0.1);
 }
 
 .input-field::placeholder {
@@ -135,6 +135,10 @@ function autoResize() {
   background: rgba(74, 144, 217, 0.3);
   border-color: #4a90d9;
   color: #c8dcff;
+}
+
+.btn-send:active:not(:disabled) {
+  animation: pulse-ring 0.4s ease-out;
 }
 
 .btn-send:disabled,

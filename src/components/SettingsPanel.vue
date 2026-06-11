@@ -5,6 +5,7 @@
 import { ref } from 'vue'
 import { useGameStore } from '../stores/gameStore'
 import type { SettingsTab } from '../types/game'
+import WorldBookManager from './WorldBookManager.vue'
 
 const store = useGameStore()
 
@@ -76,6 +77,9 @@ function handleSaveGame() {
         <button :class="['tab-btn', { active: tab === 'prompt' }]" @click="tab = 'prompt'">
           📜 系统提示
         </button>
+        <button :class="['tab-btn', { active: tab === 'worldbook' }]" @click="tab = 'worldbook'">
+          📖 世界书
+        </button>
       </div>
 
       <div class="modal-body">
@@ -144,6 +148,11 @@ function handleSaveGame() {
               rows="20"
             ></textarea>
           </div>
+        </div>
+
+        <!-- 世界书 -->
+        <div v-if="tab === 'worldbook'" class="tab-content">
+          <WorldBookManager />
         </div>
       </div>
 

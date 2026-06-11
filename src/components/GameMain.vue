@@ -14,8 +14,14 @@ const showSettings = ref(false)
 
 <template>
   <div class="game-main">
+    <!-- 粒子背景 -->
+    <div class="particles-bg">
+      <span v-for="n in 8" :key="n" class="particle" :style="{ left: `${n * 13 + 5}%`, animationDelay: `${n * 1.2}s`, animationDuration: `${8 + n * 2}s` }"></span>
+    </div>
+
     <!-- 顶部栏 -->
     <header class="top-bar">
+      <div class="scanline"></div>
       <div class="top-left">
         <span class="logo">🛸 豌豆号</span>
         <span class="ship-status" title="飞船状态">🟢 系统正常</span>
@@ -61,6 +67,27 @@ const showSettings = ref(false)
   background:
     radial-gradient(ellipse at 50% 0%, rgba(20, 60, 100, 0.15) 0%, transparent 60%),
     linear-gradient(180deg, #0a0a1a 0%, #0d1b2a 40%, #0f1d2d 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+/* 粒子背景 */
+.particles-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.particle {
+  position: absolute;
+  bottom: -4px;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: rgba(74, 144, 217, 0.5);
+  animation: float-particle linear infinite;
 }
 
 /* 顶部栏 */
@@ -72,6 +99,19 @@ const showSettings = ref(false)
   background: rgba(8, 16, 28, 0.95);
   border-bottom: 1px solid #1e3a5f;
   flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+  overflow: hidden;
+}
+
+.scanline {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 60%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(74, 144, 217, 0.6), transparent);
+  animation: scan-line 4s linear infinite;
 }
 
 .top-left,

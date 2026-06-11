@@ -126,19 +126,14 @@ function formatTime(ts: number): string {
 /* 消息 */
 .message {
   margin-bottom: 1rem;
-  animation: fadeIn 0.3s ease;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  animation: slide-up 0.35s ease;
 }
 
 .msg-header {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-bottom: 0.3rem;
+  margin-bottom: 0.4rem;
 }
 
 .msg-role {
@@ -158,13 +153,43 @@ function formatTime(ts: number): string {
   color: #c8dcff;
 }
 
+/* AI 消息卡片 */
+.message-assistant .msg-content {
+  padding: 0.65rem 0.85rem;
+  background: rgba(13, 27, 42, 0.5);
+  border: 1px solid rgba(30, 58, 95, 0.5);
+  border-left: 3px solid #4a90d9;
+  border-radius: 0 8px 8px 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
 /* 用户消息样式 */
+.message-user {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.message-user .msg-header {
+  flex-direction: row-reverse;
+}
+
 .message-user .msg-content {
   color: #90b8e0;
   padding: 0.5rem 0.75rem;
-  background: rgba(30, 60, 100, 0.3);
-  border-left: 2px solid #4a90d9;
-  border-radius: 0 6px 6px 0;
+  background: rgba(30, 60, 100, 0.25);
+  border-right: 2px solid #4a90d9;
+  border-radius: 6px 0 0 6px;
+  max-width: 85%;
+  text-align: right;
+}
+
+/* 系统消息 */
+.message-system .msg-content {
+  text-align: center;
+  color: #6b8db5;
+  font-style: italic;
+  padding: 0.3rem;
 }
 
 /* Markdown 渲染 */
@@ -181,10 +206,33 @@ function formatTime(ts: number): string {
 }
 
 .msg-content :deep(code) {
-  background: rgba(0, 0, 0, 0.3);
-  padding: 0.1rem 0.3rem;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 0.15rem 0.4rem;
   border-radius: 3px;
   font-size: 0.85em;
+  border: 1px solid rgba(30, 58, 95, 0.4);
+}
+
+.msg-content :deep(pre) {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid #1e3a5f;
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+  overflow-x: auto;
+  margin: 0.5rem 0;
+}
+
+.msg-content :deep(pre code) {
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.msg-content :deep(blockquote) {
+  border-left: 2px solid #4a90d9;
+  padding-left: 0.75rem;
+  margin: 0.5rem 0;
+  color: #8ba4c0;
 }
 
 /* 光标闪烁 */

@@ -69,13 +69,14 @@ function handleDeleteSave() {
   <div class="start-screen">
     <!-- 星空背景 -->
     <div class="stars-bg"></div>
+    <div class="stars-twinkle"></div>
 
     <div class="start-container">
       <!-- 标题 -->
       <div class="title-section">
         <div class="title-icon">🛸</div>
         <h1 class="title">豌豆星际漂流</h1>
-        <p class="subtitle">WANDOU · COSMIC DRIFTER v0.1</p>
+        <p class="subtitle">WANDOU · COSMIC DRIFTER v0.2</p>
       </div>
 
       <!-- Tab 切换 -->
@@ -216,7 +217,24 @@ function handleDeleteSave() {
     radial-gradient(1.5px 1.5px at 55% 85%, rgba(255,255,255,0.3), transparent),
     radial-gradient(1px 1px at 70% 15%, rgba(255,255,255,0.6), transparent),
     linear-gradient(180deg, #0a0a1a 0%, #0d1b2a 40%, #1b2838 100%);
+  z-index: -2;
+}
+
+/* 闪烁星星覆盖层 */
+.stars-twinkle {
+  position: fixed;
+  inset: 0;
   z-index: -1;
+  background:
+    radial-gradient(1.5px 1.5px at 12% 60%, rgba(180, 220, 255, 0.8), transparent),
+    radial-gradient(1px 1px at 30% 25%, rgba(180, 220, 255, 0.6), transparent),
+    radial-gradient(1.5px 1.5px at 48% 75%, rgba(180, 220, 255, 0.7), transparent),
+    radial-gradient(1px 1px at 62% 18%, rgba(180, 220, 255, 0.5), transparent),
+    radial-gradient(1.5px 1.5px at 78% 55%, rgba(180, 220, 255, 0.7), transparent),
+    radial-gradient(1px 1px at 88% 38%, rgba(180, 220, 255, 0.6), transparent),
+    radial-gradient(1.5px 1.5px at 25% 88%, rgba(180, 220, 255, 0.5), transparent),
+    radial-gradient(1px 1px at 55% 12%, rgba(180, 220, 255, 0.6), transparent);
+  animation: twinkle 3s ease-in-out infinite;
 }
 
 .start-container {
@@ -250,6 +268,7 @@ function handleDeleteSave() {
   margin: 0;
   letter-spacing: 0.05em;
   text-shadow: 0 0 20px rgba(100, 180, 255, 0.3);
+  animation: glow-pulse 4s ease-in-out infinite;
 }
 
 .subtitle {

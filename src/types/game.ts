@@ -1,6 +1,8 @@
 // ============================================================
-// wandou v0.1 — 豌豆星际漂流 · 类型定义
+// wandou v0.2 — 豌豆星际漂流 · 类型定义
 // ============================================================
+
+import type { WorldBookEntry } from './worldBook'
 
 /** LLM API 配置 */
 export interface ApiConfig {
@@ -35,6 +37,8 @@ export interface GameSave {
   messages: GameMessage[]
   systemPrompt: string
   apiConfig: ApiConfig
+  worldBook: WorldBookEntry[]
+  worldBookEnabled: boolean
 }
 
 /** 游戏阶段 */
@@ -44,4 +48,4 @@ export type GamePhase =
   | 'playing'     // 游戏中
 
 /** 设置面板 Tab */
-export type SettingsTab = 'api' | 'character' | 'prompt'
+export type SettingsTab = 'api' | 'character' | 'prompt' | 'worldbook'
