@@ -36,14 +36,14 @@ function time(ts: number) {
 
     <div v-for="m in store.messages" :key="m.id" :class="['msg', m.role === 'user' ? 'msg-user' : 'msg-ai']">
       <div class="msg-head">
-        <span class="msg-who">{{ m.role === 'user' ? '👨‍🚀 ' + (store.character.name || '舰长') : '🤖 豆豆' }}</span>
+        <span class="msg-who">{{ m.role === 'user' ? '👨‍🚀 ' + (store.character.name || '舰长') : '🤖 乌拉' }}</span>
         <span class="msg-time">{{ time(m.timestamp) }}</span>
       </div>
       <div class="msg-body" v-html="md(m.content)"></div>
     </div>
 
     <div v-if="store.isGenerating && store.messages.length === 0" class="loading">
-      <span class="dot"></span> 豆豆正在思考...
+      <span class="dot"></span> 乌拉正在思考...
     </div>
 
     <div v-if="store.error" class="err">
