@@ -21,6 +21,12 @@ function saveWorldInfo() {
   store.autoSave()
 }
 
+// ---- 辅助：修改后自动保存 ----
+function autoSaveAfterChange() {
+  // 世界详情页的任何修改都应该立刻保存
+  store.autoSave()
+}
+
 // ---- NPC 导入 ----
 const npcImportText = ref('')
 const showNpcImport = ref(false)
@@ -29,7 +35,10 @@ const npcFileInput = ref<HTMLInputElement | null>(null)
 function importNpcs() {
   if (!npcImportText.value.trim()) return
   const result = importNpcJson(npcImportText.value)
-  if (result.success && result.entries.length > 0) store.addNpcEntries(result.entries)
+  if (result.success && result.entries.length > 0) {
+    store.addNpcEntries(result.entries)
+    autoSaveAfterChange()
+  }
   if (result.imported > 0) npcImportText.value = ''
 }
 function onNpcFile(e: Event) {
@@ -40,6 +49,9 @@ function onNpcFile(e: Event) {
   reader.readAsText(file); input.value = ''
 }
 
+function removeNpcWithSave(id: string) { store.removeNpc(id); autoSaveAfterChange() }
+function toggleNpcWithSave(id: string) { store.toggleNpc(id); autoSaveAfterChange() }
+
 // ---- 世界书导入 ----
 const wbImportText = ref('')
 const showWbImport = ref(false)
@@ -48,7 +60,10 @@ const wbFileInput = ref<HTMLInputElement | null>(null)
 function importWb() {
   if (!wbImportText.value.trim()) return
   const result = importWorldBook(wbImportText.value)
-  if (result.success && result.entries.length > 0) store.addWorldBookEntries(result.entries)
+  if (result.success && result.entries.length > 0) {
+    store.addWorldBookEntries(result.entries)
+    autoSaveAfterChange()
+  }
   if (result.imported > 0) wbImportText.value = ''
 }
 function onWbFile(e: Event) {
@@ -59,8 +74,12 @@ function onWbFile(e: Event) {
   reader.readAsText(file); input.value = ''
 }
 
+function removeWbWithSave(id: string) { store.removeWorldBookEntry(id); autoSaveAfterChange() }
+function toggleWbWithSave(id: string) { store.toggleWorldBookEntry(id); autoSaveAfterChange() }
+
 // ---- 进入游戏 ----
 function handleEnterGame() {
+  autoSaveAfterChange()  // 最后保存一次确保数据一致
   if (store.character.name.trim()) {
     store.phase = 'playing'
   } else {
@@ -122,12 +141,12 @@ function goBack() {
         <div v-if="store.npcs.length === 0" class="empty">暂无 NPC</div>
         <div v-for="n in store.npcs" :key="n.id" :class="['entry', { off: !n.enabled }]">
           <div class="er">
-            <button class="tg" @click="store.toggleNpc(n.id)">{{ n.enabled ? '✅' : '⛔' }}</button>
+            <button class="tg" @click="toggleNpcWithSave(n.id)">{{ n.enabled ? '✅' : '⛔' }}</button>
             <div class="ei">
               <span class="enm">{{ n.name }}</span>
               <span v-if="n.role" class="erl">{{ n.role }}</span>
             </div>
-            <button class="edel" @click="store.removeNpc(n.id)">🗑️</button>
+            <button class="edel" @click="removeNpcWithSave(n.id)">🗑️</button>
           </div>
           <div class="eks">
             <span v-for="k in n.keys.slice(0,4)" :key="k" class="kt">{{ k }}</span>
@@ -154,12 +173,12 @@ function goBack() {
         <div v-if="store.worldBook.length === 0" class="empty">暂无世界书条目</div>
         <div v-for="e in store.worldBook" :key="e.id" :class="['entry', { off: !e.enabled }]">
           <div class="er">
-            <button class="tg" @click="store.toggleWorldBookEntry(e.id)">{{ e.enabled ? '✅' : '⛔' }}</button>
+            <button class="tg" @click="toggleWbWithSave(e.id)">{{ e.enabled ? '✅' : '⛔' }}</button>
             <div class="ei">
               <span class="enm">{{ e.comment || '（未命名）' }}</span>
             </div>
             <span class="pri">{{ e.position === 'at_constant' ? '📌' : '#' + e.priority }}</span>
-            <button class="edel" @click="store.removeWorldBookEntry(e.id)">🗑️</button>
+            <button class="edel" @click="removeWbWithSave(e.id)">🗑️</button>
           </div>
           <div class="eks">
             <span v-for="k in e.keys.slice(0,4)" :key="k" class="kt">{{ k }}</span>
