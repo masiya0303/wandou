@@ -51,13 +51,17 @@ export const useGameStore = defineStore('game', () => {
   const worldList = ref<WorldMeta[]>([])
   const currentWorldId = ref<string | null>(null)
 
+  // ---- 全局世界书（对所有世界生效）----
+  const globalWorldBook = ref<WorldBookEntry[]>(structuredClone(PRESET_WORLD_BOOK))
+  const globalWorldBookEnabled = ref(true)
+
   // ---- 当前世界状态 (lazy load) ----
   const worldName = ref('')
   const worldDescription = ref('')
   const character = ref<CharacterInfo>({ ...DEFAULT_CHARACTER })
   const messages = ref<GameMessage[]>([])
   const npcs = ref<NpcEntry[]>([])
-  const worldBook = ref<WorldBookEntry[]>(structuredClone(PRESET_WORLD_BOOK))
+  const worldBook = ref<WorldBookEntry[]>([]) // 当前世界的世界书（空数组，不再给默认值）
   const worldBookEnabled = ref(true)
 
   // ---- 运行时 ----
@@ -69,18 +73,42 @@ export const useGameStore = defineStore('game', () => {
   const isCharacterReady = computed(() => !!character.value.name.trim())
   const canStart = computed(() => isApiReady.value && isCharacterReady.value)
   const messageCount = computed(() => messages.value.length)
-  const enabledEntries = computed(() => worldBook.value.filter(e => e.enabled).length)
+  const globalEnabledEntries = computed(() => globalWorldBook.value.filter(e => e.enabled).length)
+  const worldEnabledEntries = computed(() => worldBook.value.filter(e => e.enabled).length)
   const enabledNpcs = computed(() => npcs.value.filter(n => n.enabled).length)
 
   // ============ 初始化 ============
 
   async function initStore() {
-    // 迁移旧存档
     await _migrateOldSave()
-    // 加载世界列表
+    await _loadGlobalWorldBook()
     worldList.value = await _loadWorldList()
     storeReady.value = true
-    console.log(`[Store] 已加载 ${worldList.value.length} 个世界`)
+    console.log(`[Store] 已加载 ${worldList.value.length} 个世界, 全局世界书 ${globalWorldBook.value.length} 条`)
+  }
+
+  async function _loadGlobalWorldBook() {
+    try {
+      const list = await db.getGlobal('globalWorldBook')
+      if (list && Array.isArray(list) && list.length > 0) {
+        globalWorldBook.value = list
+      }
+    } catch {}
+    // legacy: 从 localStorage 读取
+    try {
+      const raw = localStorage.getItem('wandou_global_worldbook')
+      if (raw) {
+        const list = JSON.parse(raw)
+        if (Array.isArray(list) && list.length > 0) {
+          globalWorldBook.value = list
+        }
+      }
+    } catch {}
+  }
+
+  async function _saveGlobalWorldBook() {
+    try { await db.putGlobal('globalWorldBook', globalWorldBook.value) } catch {}
+    try { localStorage.setItem('wandou_global_worldbook', JSON.stringify(globalWorldBook.value)) } catch {}
   }
 
   async function _migrateOldSave() {
@@ -206,7 +234,7 @@ export const useGameStore = defineStore('game', () => {
       character.value = w.character
       npcs.value = w.npcs || []
       messages.value = w.messages || []
-      worldBook.value = w.worldBook?.length ? w.worldBook : structuredClone(PRESET_WORLD_BOOK)
+      worldBook.value = w.worldBook || []
       worldBookEnabled.value = w.worldBookEnabled !== false
       if (data.apiConfig?.apiKey) apiConfig.value = data.apiConfig
       return true
@@ -223,7 +251,7 @@ export const useGameStore = defineStore('game', () => {
     character.value = { ...DEFAULT_CHARACTER }
     npcs.value = []
     messages.value = []
-    worldBook.value = structuredClone(PRESET_WORLD_BOOK)
+    worldBook.value = []
     worldBookEnabled.value = true
     error.value = ''
 
@@ -267,7 +295,7 @@ export const useGameStore = defineStore('game', () => {
     character.value = { ...DEFAULT_CHARACTER }
     npcs.value = []
     messages.value = []
-    worldBook.value = structuredClone(PRESET_WORLD_BOOK)
+    worldBook.value = []
     error.value = ''
     isGenerating.value = false
   }
@@ -294,20 +322,32 @@ export const useGameStore = defineStore('game', () => {
     return importNpcJson(jsonStr)
   }
 
-  // ============ 世界书管理 ============
+  // ============ 全局世界书管理 ============
+
+  function addGlobalWorldBookEntries(entries: WorldBookEntry[]) {
+    const ids = new Set(globalWorldBook.value.map(e => e.id))
+    for (const e of entries) { if (!ids.has(e.id)) globalWorldBook.value.push(e) }
+    _saveGlobalWorldBook()
+  }
+  function removeGlobalWorldBookEntry(id: string) { globalWorldBook.value = globalWorldBook.value.filter(e => e.id !== id); _saveGlobalWorldBook() }
+  function toggleGlobalWorldBookEntry(id: string) {
+    const e = globalWorldBook.value.find(x => x.id === id)
+    if (e) { e.enabled = !e.enabled; _saveGlobalWorldBook() }
+  }
+  function resetGlobalWorldBook() { globalWorldBook.value = structuredClone(PRESET_WORLD_BOOK); _saveGlobalWorldBook() }
+
+  // ============ 当前世界书管理 ============
 
   function addWorldBookEntries(entries: WorldBookEntry[]) {
-    const existingIds = new Set(worldBook.value.map(e => e.id))
-    for (const entry of entries) {
-      if (!existingIds.has(entry.id)) worldBook.value.push(entry)
-    }
+    const ids = new Set(worldBook.value.map(e => e.id))
+    for (const e of entries) { if (!ids.has(e.id)) worldBook.value.push(e) }
   }
   function removeWorldBookEntry(id: string) { worldBook.value = worldBook.value.filter(e => e.id !== id) }
   function toggleWorldBookEntry(id: string) {
     const entry = worldBook.value.find(e => e.id === id)
     if (entry) entry.enabled = !entry.enabled
   }
-  function resetWorldBook() { worldBook.value = structuredClone(PRESET_WORLD_BOOK) }
+  function resetWorldBook() { worldBook.value = [] }
 
   // ============ Prompt 注入（三层）============
 
@@ -319,15 +359,18 @@ export const useGameStore = defineStore('game', () => {
       parts.push(`## 当前世界：${worldName.value || '未知世界'}\n${worldDescription.value.trim()}`)
     }
 
-    // 第二层：世界书
-    if (worldBookEnabled.value) {
-      const texts = extractRecentText(messages.value, 10)
-      const ctx = scanAndCollect(worldBook.value, texts, 2000)
-      if (ctx) parts.push(ctx)
+    // 第二层：全局世界书 + 当前世界书
+    const texts = extractRecentText(messages.value, 10)
+    if (globalWorldBookEnabled.value && globalWorldBook.value.length > 0) {
+      const gCtx = scanAndCollect(globalWorldBook.value, texts, 1500)
+      if (gCtx) parts.push(gCtx.replace('【世界书·背景参考】', '【全局世界书】'))
+    }
+    if (worldBookEnabled.value && worldBook.value.length > 0) {
+      const wCtx = scanAndCollect(worldBook.value, texts, 1500)
+      if (wCtx) parts.push(wCtx.replace('【世界书·背景参考】', `【${worldName.value || '当前'}世界书】`))
     }
 
     // 第三层：场景 NPC
-    const texts = extractRecentText(messages.value, 10)
     const npcCtx = scanNpcs(npcs.value, texts, 1500)
     if (npcCtx) parts.push(npcCtx)
 
@@ -429,14 +472,17 @@ ${worldDescription.value ? worldDescription.value.slice(0, 200) + '...' : ''}
   return {
     storeReady, phase, apiConfig, systemPrompt,
     worldList, currentWorldId,
-    worldName, worldDescription, character, messages, npcs, worldBook, worldBookEnabled,
+    worldName, worldDescription, character, messages, npcs,
+    globalWorldBook, globalWorldBookEnabled, worldBook, worldBookEnabled,
     isGenerating, error,
 
-    isApiReady, isCharacterReady, canStart, messageCount, enabledEntries, enabledNpcs,
+    isApiReady, isCharacterReady, canStart, messageCount,
+    globalEnabledEntries, worldEnabledEntries, enabledNpcs,
 
     initStore,
     createWorld, enterWorld, deleteWorld,
     addNpcEntries, removeNpc, toggleNpc, importNpcsFromJson,
+    addGlobalWorldBookEntries, removeGlobalWorldBookEntry, toggleGlobalWorldBookEntry, resetGlobalWorldBook,
     addWorldBookEntries, removeWorldBookEntry, toggleWorldBookEntry, resetWorldBook,
     sendMessage, regenerate, clearMessages, autoSave, syncSave,
     startPlaying,
