@@ -22,17 +22,13 @@ const editModel = ref(store.apiConfig.model)
 const editTemperature = ref(store.apiConfig.temperature)
 const editMaxTokens = ref(store.apiConfig.maxTokens)
 
-const editName = ref(store.character.name)
-const editAge = ref(store.character.age)
-const editGender = ref(store.character.gender)
-const editBackground = ref(store.character.background)
 
 const editSystemPrompt = ref(store.systemPrompt)
 const saved = ref(false)
 
 function handleSave() {
   store.updateApiConfig({ apiKey: editApiKey.value, baseUrl: editBaseUrl.value, model: editModel.value, temperature: editTemperature.value, maxTokens: editMaxTokens.value })
-  store.updateCharacter({ name: editName.value, age: editAge.value, gender: editGender.value, background: editBackground.value })
+
   store.updateSystemPrompt(editSystemPrompt.value)
   saved.value = true; setTimeout(() => saved.value = false, 2000)
 }
@@ -46,7 +42,7 @@ async function handleSaveGame() {
 // 卡片定义
 const CARDS = [
   { key: 'api', icon: '🔌', cn: 'API 配置', en: 'API CONFIG', desc: 'LLM 接口地址、密钥、模型参数' },
-  { key: 'character', icon: '👤', cn: '角色信息', en: 'CHARACTER', desc: '舰长姓名、年龄、性别、背景' },
+
   { key: 'prompt', icon: '📜', cn: '系统提示词', en: 'SYSTEM PROMPT', desc: '定义 AI 的世界观、风格和行为' },
   { key: 'worldbook', icon: '📖', cn: '全局世界书', en: 'GLOBAL WORLD BOOK', desc: '适用于所有世界的通用背景知识库' },
 ]
@@ -117,28 +113,6 @@ function goBack() { page.value = null }
             <div class="form-group flex-1"><label>温度 {{ editTemperature }}</label><input v-model.number="editTemperature" type="range" min="0" max="2" step="0.1" class="slider" /></div>
             <div class="form-group flex-1"><label>Max Tokens</label><input v-model.number="editMaxTokens" type="number" class="form-input" min="256" max="128000" /></div>
           </div>
-          <button class="btn-primary" @click="handleSave">保存</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- ========== 子页面：角色信息 ========== -->
-    <div v-if="page === 'character'" class="sub-page">
-      <header class="sub-header">
-        <button class="btn-back glass-panel" @click="goBack">← 返回</button>
-        <h2>👤 角色信息 <span class="h-en">CHARACTER</span></h2>
-        <span></span>
-      </header>
-      <div class="sub-body">
-        <div class="form-card glass-panel corner-deco">
-          <div class="form-group"><label>姓名 <span class="l-en">NAME</span></label><input v-model="editName" type="text" class="form-input" /></div>
-          <div class="form-row">
-            <div class="form-group flex-1"><label>年龄 <span class="l-en">AGE</span></label><input v-model.number="editAge" type="number" class="form-input" min="18" /></div>
-            <div class="form-group flex-1"><label>性别 <span class="l-en">GENDER</span></label>
-              <select v-model="editGender" class="form-input"><option value="">不透露</option><option value="male">男性</option><option value="female">女性</option><option value="other">其他</option></select>
-            </div>
-          </div>
-          <div class="form-group"><label>背景 <span class="l-en">BACKGROUND</span></label><textarea v-model="editBackground" class="form-input form-textarea" rows="3"></textarea></div>
           <button class="btn-primary" @click="handleSave">保存</button>
         </div>
       </div>
