@@ -499,6 +499,25 @@ ${worldDescription.value ? worldDescription.value.slice(0, 200) + '...' : ''}
   function updateCharacter(c: Partial<CharacterInfo>) { Object.assign(character.value, c) }
   function updateSystemPrompt(p: string) { systemPrompt.value = p }
 
+  // 从存储加载某个世界的世界书（不进入世界）
+  async function loadWorldBookOnly(id: string): Promise<boolean> {
+    try {
+      let data: any = null
+      const raw = localStorage.getItem(LOCAL_KEY_PREFIX + id)
+      if (raw) data = JSON.parse(raw)
+      if (!data || !data.world) {
+        const idb = await db.getWorld(id)
+        if (idb) data = idb
+      }
+      if (!data?.world) return false
+      worldBook.value = data.world.worldBook || []
+      worldBookEnabled.value = data.world.worldBookEnabled !== false
+      worldName.value = data.world.name || ''
+      currentWorldId.value = id
+      return true
+    } catch { return false }
+  }
+
   // ----导出----
   return {
     storeReady, phase, previousPhase, apiConfig, systemPrompt,
@@ -514,7 +533,7 @@ ${worldDescription.value ? worldDescription.value.slice(0, 200) + '...' : ''}
     createWorld, openWorldDetailFromList, goToWorldDetail, enterWorld, deleteWorld, updateWorldInfo,
     addNpcEntries, removeNpc, toggleNpc, importNpcsFromJson,
     addGlobalWorldBookEntries, removeGlobalWorldBookEntry, toggleGlobalWorldBookEntry, resetGlobalWorldBook,
-    addWorldBookEntries, removeWorldBookEntry, toggleWorldBookEntry, resetWorldBook,
+    addWorldBookEntries, removeWorldBookEntry, toggleWorldBookEntry, resetWorldBook, loadWorldBookOnly,
     sendMessage, regenerate, clearMessages, autoSave, syncSave,
     startPlaying,
     updateApiConfig, updateCharacter, updateSystemPrompt,
