@@ -62,7 +62,7 @@ function fmt(ts: number) { return new Date(ts).toLocaleDateString('zh-CN', { mon
 </template>
 
 <style scoped>
-.screen { min-height: 100vh; position: relative; overflow: hidden; display: flex; flex-direction: column; background: url('/bg.jpg') center/cover no-repeat; }
+.screen { min-height: 100vh; position: relative; overflow: hidden; display: flex; flex-direction: column; background: url('/splash-bg.png') center/cover no-repeat; }
 .bg-base { display: none; }
 .bg-orbs { position: fixed; inset: 0; z-index: -3; pointer-events: none; }
 .orb { position: absolute; border-radius: 50%; filter: blur(80px); animation: orb-pulse 8s ease-in-out infinite; }

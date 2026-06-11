@@ -169,7 +169,7 @@ async function goBack() {
 </template>
 
 <style scoped>
-.screen { height: 100vh; position: relative; overflow-y: auto; overflow-x: hidden; background: url('/bg.jpg') center/cover no-repeat; }
+.screen { height: 100vh; position: relative; overflow-y: auto; overflow-x: hidden; background: url('/splash-bg.png') center/cover no-repeat; }
 .bg-base { display: none; }
 .container { position: relative; z-index: 1; max-width: 640px; width: 100%; margin: 0 auto; padding: 1rem 1.2rem 2rem; display: flex; flex-direction: column; gap: 0.6rem; }
 
