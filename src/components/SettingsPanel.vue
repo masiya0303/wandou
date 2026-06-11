@@ -9,6 +9,7 @@ const emit = defineEmits<{ close: [] }>()
 const hasActiveGame = computed(() => store.messages.length > 0)
 const page = ref<string | null>(null)
 
+// ---- edits ----
 const editApiKey = ref(store.apiConfig.apiKey)
 const editBaseUrl = ref(store.apiConfig.baseUrl)
 const editModel = ref(store.apiConfig.model)
@@ -16,6 +17,10 @@ const editTemperature = ref(store.apiConfig.temperature)
 const editMaxTokens = ref(store.apiConfig.maxTokens)
 const editSystemPrompt = ref(store.systemPrompt)
 const saved = ref(false)
+
+// ---- theme ----
+const themeJson = ref('')
+const themeMsg = ref('')
 
 function handleSave() {
   store.updateApiConfig({ apiKey: editApiKey.value, baseUrl: editBaseUrl.value, model: editModel.value, temperature: editTemperature.value, maxTokens: editMaxTokens.value })
@@ -26,11 +31,25 @@ async function handleSaveGame() {
   try { await store.autoSave(); saved.value = true; setTimeout(() => saved.value = false, 2000) } catch {}
 }
 
+function themeDesc() {
+  if (store.themeId === 'bjd-pink') return '当前：bjd粉色'
+  if (store.themeId === 'wandou-dark') return '当前：wandou暗色'
+  return '当前：自定义主题'
+}
+
+function handleThemeImport() {
+  themeMsg.value = ''
+  if (!themeJson.value.trim()) return
+  const ok = store.importThemeJson(themeJson.value)
+  themeMsg.value = ok ? '✅ 主题已应用' : '❌ JSON 解析失败'
+  if (ok) themeJson.value = ''
+}
+
 const CARDS = [
   { key: 'api', icon: '🔌', cn: 'API 配置', en: 'API CONFIG', desc: 'LLM 接口、密钥、模型' },
   { key: 'prompt', icon: '📜', cn: '系统提示词', en: 'SYSTEM PROMPT', desc: 'AI 世界观、风格和行为' },
   { key: 'worldbook', icon: '📖', cn: '全局世界书', en: 'GLOBAL WB', desc: '所有世界通用的背景知识' },
-  { key: 'theme', icon: '🎨', cn: '聊天主题', en: 'THEME', desc: store.themeId === 'bjd-pink' ? '当前：bjd粉色' : '当前：wandou暗色' },
+  { key: 'theme', icon: '🎨', cn: '聊天主题', en: 'THEME', desc: '' },
 ]
 
 function goBack() { page.value = null }
@@ -40,22 +59,21 @@ function goBack() { page.value = null }
   <div class="ss">
     <div class="ss-bg"></div>
 
+    <!-- home -->
     <div v-if="page === null" class="ss-main">
       <header class="ss-head">
         <span></span>
         <div class="ss-title"><h1>⚙️ 设置</h1><p>SETTINGS</p></div>
         <button class="ss-close" @click="emit('close')">✕</button>
       </header>
-
       <div class="card-grid">
-        <button v-for="c in CARDS" :key="c.key" class="s-card glass-panel corner-deco" @click="c.key === 'theme' ? store.applyTheme(store.themeId === 'bjd-pink' ? 'wandou-dark' : 'bjd-pink') : (page = c.key)">
+        <button v-for="c in CARDS" :key="c.key" class="s-card glass-panel corner-deco" @click="page = c.key">
           <span class="s-icon">{{ c.icon }}</span>
           <div class="s-labels"><span class="s-cn">{{ c.cn }}</span><span class="s-en">{{ c.en }}</span></div>
-          <p class="s-desc">{{ c.desc }}</p>
+          <p class="s-desc">{{ c.key === 'theme' ? themeDesc() : c.desc }}</p>
           <span class="s-arrow">→</span>
         </button>
       </div>
-
       <div class="ss-foot">
         <button v-if="hasActiveGame" class="ss-btn" @click="handleSaveGame">💾 手动存档</button>
         <button class="ss-btn" @click="handleSave">保存设置</button>
@@ -63,14 +81,16 @@ function goBack() { page.value = null }
       </div>
     </div>
 
-    <!-- sub-pages -->
+    <!-- sub -->
     <div v-if="page" class="sub">
       <header class="sub-head">
         <button class="sub-back" @click="goBack">← 返回</button>
-        <h2>{{ {api:'🔌 API 配置',prompt:'📜 系统提示词',worldbook:'📖 全局世界书'}[page] }}</h2>
+        <h2>{{ {api:'🔌 API 配置',prompt:'📜 系统提示词',worldbook:'📖 全局世界书',theme:'🎨 聊天主题'}[page] }}</h2>
         <span></span>
       </header>
       <div class="sub-body">
+
+        <!-- API -->
         <div v-if="page === 'api'" class="form-card glass-panel corner-deco">
           <div class="fg"><label>API Key <span class="l-en">AUTH</span></label><input v-model="editApiKey" type="password" class="fi" placeholder="sk-..." /></div>
           <div class="fg"><label>API 地址 <span class="l-en">ENDPOINT</span></label><input v-model="editBaseUrl" type="text" class="fi" /></div>
@@ -82,14 +102,37 @@ function goBack() { page.value = null }
           <button class="sub-save" @click="handleSave">保存</button>
         </div>
 
+        <!-- Prompt -->
         <div v-if="page === 'prompt'" class="form-card glass-panel corner-deco">
           <p style="font-size:12px;color:var(--text-secondary);margin:0 0 12px">提示词决定 AI 的世界观、风格和行为。</p>
           <div class="fg"><textarea v-model="editSystemPrompt" class="fi fi-ta" rows="22" style="font-family:monospace;font-size:12px"></textarea></div>
           <button class="sub-save" @click="handleSave">保存</button>
         </div>
 
+        <!-- WorldBook -->
         <div v-if="page === 'worldbook'" class="form-card glass-panel corner-deco">
           <WorldBookManager />
+        </div>
+
+        <!-- Theme -->
+        <div v-if="page === 'theme'" class="form-card glass-panel corner-deco">
+          <p style="font-size:13px;color:var(--text-secondary);margin:0 0 16px">点击预设主题，或粘贴 ST 主题 JSON 导入自定义主题。</p>
+
+          <div style="display:flex;gap:10px;margin-bottom:16px">
+            <button class="theme-btn" :class="{active:store.themeId==='bjd-pink'}" @click="store.applyTheme('bjd-pink')">🎀 bjd粉色</button>
+            <button class="theme-btn" :class="{active:store.themeId==='wandou-dark'}" @click="store.applyTheme('wandou-dark')">🌑 wandou暗色</button>
+          </div>
+
+          <hr style="border:1px solid var(--glass-border);margin:0 0 16px" />
+
+          <div class="fg">
+            <label>导入主题 JSON <span class="l-en">IMPORT</span></label>
+            <textarea v-model="themeJson" class="fi fi-ta" rows="8" placeholder="粘贴 SillyTavern 主题 JSON..." style="font-family:monospace;font-size:12px"></textarea>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <button class="sub-save" style="margin-top:0;width:auto;padding:9px 20px" @click="handleThemeImport">导入并应用</button>
+            <span v-if="themeMsg" :style="{fontSize:'12px',color:themeMsg.startsWith('✅')?'var(--success)':'var(--danger)'}">{{ themeMsg }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -146,6 +189,10 @@ function goBack() { page.value = null }
 .fg-row { display: flex; gap: 12px; }
 .sub-save { width: 100%; margin-top: 8px; padding: 9px; border: 1px solid var(--accent-cyan); border-radius: 8px; background: rgba(0,229,255,0.08); color: var(--accent-cyan); font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; transition: all 0.2s; }
 .sub-save:active { background: rgba(0,229,255,0.18); }
+
+.theme-btn { padding: 10px 18px; border: 2px solid var(--glass-border); border-radius: 10px; background: var(--glass-bg); color: var(--text-secondary); font-size: 14px; cursor: pointer; font-family: inherit; transition: all 0.2s; flex: 1; }
+.theme-btn.active { border-color: var(--accent-cyan); color: var(--accent-cyan); background: rgba(34,211,238,0.08); }
+.theme-btn:active { transform: scale(0.97); }
 
 @media (max-width: 500px) { .card-grid { grid-template-columns: 1fr; gap: 10px; } .s-card { min-height: 100px; padding: 18px 12px; } }
 </style>
