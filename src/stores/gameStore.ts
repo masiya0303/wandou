@@ -1,5 +1,6 @@
 // ============================================================
-// wandou v0.2 — 豌豆星际漂流 · 游戏状态管理
+// wandou v0.6 — 豌豆星际漂流 · 游戏状态管理
+// 存储：IndexedDB + 自动存档
 // ============================================================
 
 import { defineStore } from 'pinia'
@@ -8,8 +9,10 @@ import type { ApiConfig, GameMessage, CharacterInfo, GameSave, GamePhase, Settin
 import type { WorldBookEntry, ImportResult } from '../types/worldBook'
 import { chatStream } from '../utils/api'
 import { scanAndCollect, extractRecentText, importWorldBook, PRESET_WORLD_BOOK } from '../utils/worldBookEngine'
+import { db } from '../utils/db'
 
-const SAVE_KEY = 'wandou_save_v0.2'
+const SAVE_ID = 'current'  // 单一存档槽
+const SAVE_VERSION = '0.6'
 
 // ---------- 默认值 ----------
 
@@ -63,8 +66,9 @@ export const useGameStore = defineStore('game', () => {
   const isGenerating = ref(false)
   const settingsTab = ref<SettingsTab>('api')
   const error = ref('')
+  const hasSave = ref(false)    // 是否有存档（异步初始化）
 
-  // --- v0.2: 世界书 ---
+  // --- 世界书 ---
   const worldBook = ref<WorldBookEntry[]>(structuredClone(PRESET_WORLD_BOOK))
   const worldBookEnabled = ref(true)
 
@@ -74,6 +78,16 @@ export const useGameStore = defineStore('game', () => {
   const canStart = computed(() => isApiReady.value && isCharacterReady.value)
   const messageCount = computed(() => messages.value.length)
   const enabledEntries = computed(() => worldBook.value.filter(e => e.enabled).length)
+
+  // ---------- 初始化：异步检查存档 ----------
+  async function initStore() {
+    try {
+      const raw = await db.getSave(SAVE_ID)
+      hasSave.value = !!raw
+    } catch {
+      hasSave.value = false
+    }
+  }
 
   // ---------- 世界书 Prompt 注入 ----------
   function buildWorldBookContext(): string {
@@ -90,9 +104,7 @@ export const useGameStore = defineStore('game', () => {
   function addWorldBookEntries(entries: WorldBookEntry[]) {
     const existingIds = new Set(worldBook.value.map(e => e.id))
     for (const entry of entries) {
-      if (!existingIds.has(entry.id)) {
-        worldBook.value.push(entry)
-      }
+      if (!existingIds.has(entry.id)) worldBook.value.push(entry)
     }
   }
 
@@ -118,13 +130,77 @@ export const useGameStore = defineStore('game', () => {
     messages.value = []
   }
 
+  // ---------- 构建存档数据 ----------
+  function _buildSave(): GameSave {
+    return {
+      version: SAVE_VERSION,
+      timestamp: Date.now(),
+      character: { ...character.value },
+      messages: [...messages.value],
+      systemPrompt: systemPrompt.value,
+      apiConfig: { ...apiConfig.value },
+      worldBook: [...worldBook.value],
+      worldBookEnabled: worldBookEnabled.value,
+    }
+  }
+
+  function _restoreSave(save: GameSave) {
+    character.value = save.character
+    messages.value = save.messages
+    systemPrompt.value = save.systemPrompt
+    apiConfig.value = save.apiConfig
+    if (save.worldBook) worldBook.value = save.worldBook
+    if (typeof save.worldBookEnabled === 'boolean') worldBookEnabled.value = save.worldBookEnabled
+  }
+
+  // ---------- 自动存档（AI 回复后调用）----------
+  async function autoSave() {
+    try {
+      const save = _buildSave()
+      await db.putSave({ id: SAVE_ID, ...save })
+      hasSave.value = true
+    } catch (e) {
+      console.error('[AutoSave] 自动存档失败:', e)
+    }
+  }
+
+  // ---------- 手动存档 ----------
+  async function saveToLocal(): Promise<boolean> {
+    try {
+      const save = _buildSave()
+      await db.putSave({ id: SAVE_ID, ...save })
+      hasSave.value = true
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  async function loadFromLocal(): Promise<boolean> {
+    try {
+      const raw = await db.getSave(SAVE_ID)
+      if (!raw) return false
+      _restoreSave(raw)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  async function deleteSave() {
+    try {
+      await db.deleteSave(SAVE_ID)
+    } catch { /* ignore */ }
+    hasSave.value = false
+    resetGame()
+  }
+
   // ---------- 发送消息（流式）----------
   async function sendMessage(userInput: string) {
     if (isGenerating.value || !userInput.trim()) return
 
     error.value = ''
 
-    // 添加用户消息
     const userMsg: GameMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
@@ -133,7 +209,6 @@ export const useGameStore = defineStore('game', () => {
     }
     addMessage(userMsg)
 
-    // 创建 AI 回复占位
     const aiMsg: GameMessage = {
       id: `assistant-${Date.now()}`,
       role: 'assistant',
@@ -145,7 +220,6 @@ export const useGameStore = defineStore('game', () => {
     isGenerating.value = true
 
     try {
-      // v0.2: 注入世界书上下文
       const wbContext = buildWorldBookContext()
       const effectiveSystemPrompt = wbContext
         ? systemPrompt.value + wbContext
@@ -154,12 +228,13 @@ export const useGameStore = defineStore('game', () => {
       const fullContent = await chatStream(
         apiConfig.value,
         effectiveSystemPrompt,
-        messages.value.slice(0, -1), // 不包含空的 AI 占位
-        (chunk) => {
-          aiMsg.content += chunk
-        },
+        messages.value.slice(0, -1),
+        (chunk) => { aiMsg.content += chunk },
       )
       aiMsg.content = fullContent
+
+      // ✅ 每次 AI 回复成功后自动存档
+      autoSave()
     } catch (e: any) {
       error.value = e.message || '请求失败，请检查 API 配置'
       messages.value = messages.value.filter(m => m.id !== aiMsg.id)
@@ -168,14 +243,12 @@ export const useGameStore = defineStore('game', () => {
     }
   }
 
-  // ---------- 重新生成最后一条 AI 回复 ----------
+  // ---------- 重新生成 ----------
   async function regenerate() {
     if (isGenerating.value) return
 
     const lastMsg = messages.value[messages.value.length - 1]
-    if (lastMsg?.role === 'assistant') {
-      messages.value.pop()
-    }
+    if (lastMsg?.role === 'assistant') messages.value.pop()
 
     const lastUserMsg = messages.value[messages.value.length - 1]
     if (lastUserMsg?.role === 'user') {
@@ -183,56 +256,6 @@ export const useGameStore = defineStore('game', () => {
       messages.value.pop()
       await sendMessage(userContent)
     }
-  }
-
-  // ---------- 存档 ----------
-  function saveToLocal(): boolean {
-    try {
-      const save: GameSave = {
-        version: '0.2',
-        timestamp: Date.now(),
-        character: { ...character.value },
-        messages: [...messages.value],
-        systemPrompt: systemPrompt.value,
-        apiConfig: { ...apiConfig.value },
-        worldBook: [...worldBook.value],
-        worldBookEnabled: worldBookEnabled.value,
-      }
-      localStorage.setItem(SAVE_KEY, JSON.stringify(save))
-      return true
-    } catch {
-      return false
-    }
-  }
-
-  function loadFromLocal(): boolean {
-    try {
-      const raw = localStorage.getItem(SAVE_KEY)
-      if (!raw) return false
-      const save: GameSave = JSON.parse(raw)
-      character.value = save.character
-      messages.value = save.messages
-      systemPrompt.value = save.systemPrompt
-      apiConfig.value = save.apiConfig
-      if (save.worldBook) {
-        worldBook.value = save.worldBook
-      }
-      if (typeof save.worldBookEnabled === 'boolean') {
-        worldBookEnabled.value = save.worldBookEnabled
-      }
-      return true
-    } catch {
-      return false
-    }
-  }
-
-  function hasSave(): boolean {
-    return !!localStorage.getItem(SAVE_KEY)
-  }
-
-  function deleteSave() {
-    localStorage.removeItem(SAVE_KEY)
-    resetGame()
   }
 
   // ---------- 重置 ----------
@@ -267,6 +290,8 @@ export const useGameStore = defineStore('game', () => {
       timestamp: Date.now(),
     }
     addMessage(welcomeMsg)
+    // 新游戏首次存档
+    autoSave()
   }
 
   // ---------- 设置 ----------
@@ -284,43 +309,19 @@ export const useGameStore = defineStore('game', () => {
 
   return {
     // state
-    phase,
-    apiConfig,
-    character,
-    systemPrompt,
-    messages,
-    isGenerating,
-    settingsTab,
-    error,
-    worldBook,
-    worldBookEnabled,
+    phase, apiConfig, character, systemPrompt, messages,
+    isGenerating, settingsTab, error, hasSave,
+    worldBook, worldBookEnabled,
 
     // computed
-    isApiReady,
-    isCharacterReady,
-    canStart,
-    messageCount,
-    enabledEntries,
+    isApiReady, isCharacterReady, canStart, messageCount, enabledEntries,
 
     // actions
-    sendMessage,
-    regenerate,
-    clearMessages,
+    initStore, sendMessage, regenerate, clearMessages,
     buildWorldBookContext,
-    importWorldBookFromJson,
-    addWorldBookEntries,
-    removeWorldBookEntry,
-    toggleWorldBookEntry,
-    resetWorldBook,
-    saveToLocal,
-    loadFromLocal,
-    hasSave,
-    deleteSave,
-    resetGame,
-    startNewGame,
-    startPlaying,
-    updateApiConfig,
-    updateCharacter,
-    updateSystemPrompt,
+    importWorldBookFromJson, addWorldBookEntries, removeWorldBookEntry, toggleWorldBookEntry, resetWorldBook,
+    saveToLocal, loadFromLocal, deleteSave, autoSave,
+    resetGame, startNewGame, startPlaying,
+    updateApiConfig, updateCharacter, updateSystemPrompt,
   }
 })

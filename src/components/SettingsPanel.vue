@@ -36,8 +36,9 @@ function handleSave() {
   store.updateSystemPrompt(editSystemPrompt.value)
   saved.value = true; setTimeout(() => saved.value = false, 2000)
 }
-function handleSaveGame() {
-  if (store.saveToLocal()) { saved.value = true; setTimeout(() => saved.value = false, 2000) }
+async function handleSaveGame() {
+  const ok = await store.saveToLocal()
+  if (ok) { saved.value = true; setTimeout(() => saved.value = false, 2000) }
 }
 
 // 卡片定义

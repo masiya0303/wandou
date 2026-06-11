@@ -9,17 +9,16 @@ import { useGameStore } from '../stores/gameStore'
 const store = useGameStore()
 const emit = defineEmits<{ openSettings: [] }>()
 
-const hasSave = computed(() => store.hasSave())
+const hasSave = computed(() => store.hasSave)
 
 function handleNewGame() {
   store.resetGame()
   store.phase = 'setup'
 }
 
-function handleContinue() {
-  if (store.loadFromLocal()) {
-    store.phase = 'playing'
-  }
+async function handleContinue() {
+  const ok = await store.loadFromLocal()
+  if (ok) store.phase = 'playing'
 }
 </script>
 
