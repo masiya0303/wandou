@@ -1,13 +1,15 @@
 // ============================================================
-// wandou v0.1 — 豌豆星际漂流 · LLM API 工具
+// wandou — 豌豆星际漂流 · LLM API 工具
+// 流式 + 非流式请求
 // ============================================================
 
 import type { ApiConfig, GameMessage } from '../types/game'
 
-/**
- * 流式聊天请求
- * @returns 拼接后的完整回复
- */
+// 确保 header 值只含 ASCII
+function safeHeader(val: string): string {
+  return val.replace(/[^\x00-\x7F]/g, '')
+}
+
 export async function chatStream(
   config: ApiConfig,
   systemPrompt: string,
@@ -19,19 +21,21 @@ export async function chatStream(
     ...history.map(m => ({ role: m.role, content: m.content })),
   ]
 
+  const body = JSON.stringify({
+    model: config.model,
+    messages,
+    temperature: config.temperature,
+    max_tokens: config.maxTokens,
+    stream: true,
+  })
+
   const response = await fetch(`${config.baseUrl}/v1/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.apiKey}`,
+      Authorization: `Bearer ${safeHeader(config.apiKey)}`,
     },
-    body: JSON.stringify({
-      model: config.model,
-      messages,
-      temperature: config.temperature,
-      max_tokens: config.maxTokens,
-      stream: true,
-    }),
+    body,
   })
 
   if (!response.ok) {
@@ -52,9 +56,8 @@ export async function chatStream(
 
     buffer += decoder.decode(value, { stream: true })
 
-    // SSE 解析
     const lines = buffer.split('\n')
-    buffer = lines.pop() || '' // 未完成的行放回 buffer
+    buffer = lines.pop() || ''
 
     for (const line of lines) {
       const trimmed = line.trim()
@@ -79,9 +82,6 @@ export async function chatStream(
   return fullContent
 }
 
-/**
- * 非流式聊天（用于简单请求）
- */
 export async function chatOnce(
   config: ApiConfig,
   systemPrompt: string,
@@ -91,7 +91,7 @@ export async function chatOnce(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.apiKey}`,
+      Authorization: `Bearer ${safeHeader(config.apiKey)}`,
     },
     body: JSON.stringify({
       model: config.model,
