@@ -44,7 +44,7 @@ function formatTime(ts: number): string {
       <p class="empty-title">通讯频道静默中</p>
       <p class="empty-sub">COMMUNICATION CHANNEL · STANDBY</p>
       <hr class="accent-divider" />
-      <p class="empty-hint">输入指令开始星际冒险</p>
+      <p class="empty-hint">输入指令开始</p>
     </div>
 
     <template v-for="(msg, idx) in store.messages" :key="msg.id">
@@ -56,12 +56,12 @@ function formatTime(ts: number): string {
         <div class="msg-header">
           <template v-if="msg.role === 'user'">
             <span class="msg-icon">👨‍🚀</span>
-            <span class="msg-role-cn">{{ store.character.name || '舰长' }}</span>
+            <span class="msg-role-cn">{{ store.character.name || '玩家' }}</span>
             <span class="msg-role-en">CAPTAIN</span>
           </template>
           <template v-else>
             <span class="msg-icon">🤖</span>
-            <span class="msg-role-cn">豆豆</span>
+            <span class="msg-role-cn">乌拉</span>
             <span class="msg-role-en">AI · DOUDOU</span>
           </template>
           <span class="msg-time">{{ formatTime(msg.timestamp) }}</span>
@@ -78,7 +78,7 @@ function formatTime(ts: number): string {
     <!-- 加载 -->
     <div v-if="store.isGenerating && store.messages.length === 0" class="loading-indicator">
       <span class="dot-pulse"></span>
-      <span>豆豆正在思考...</span>
+      <span>乌拉正在思考...</span>
     </div>
 
     <!-- 错误 -->

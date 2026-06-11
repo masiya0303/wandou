@@ -8,10 +8,8 @@ import { useGameStore } from '../stores/gameStore'
 const store = useGameStore()
 const emit = defineEmits<{ openSettings: [] }>()
 
-import { sound } from '../utils/sound'
-
-function handleWorlds() { sound.click(); store.phase = 'worldList' }
-function handleSettings() { sound.click(); emit('openSettings') }
+function handleWorlds() { store.phase = 'worldList' }
+function handleSettings() { emit('openSettings') }
 </script>
 
 <template>
@@ -77,13 +75,6 @@ function handleSettings() { sound.click(); emit('openSettings') }
           <span class="btn-arrow">→</span>
         </button>
 
-        <button class="menu-btn glass-panel corner-deco" @click="store.toggleTheme()">
-          <span class="btn-icon">{{ store.theme === 'dark' ? '🌙' : '☀️' }}</span>
-          <div class="btn-labels">
-            <span class="btn-cn">{{ store.theme === 'dark' ? '暗色模式' : '亮色模式' }}</span>
-            <span class="btn-en">{{ store.theme === 'dark' ? 'DARK' : 'LIGHT' }}</span>
-          </div>
-        </button>
       </div>
 
       <!-- 底部 -->

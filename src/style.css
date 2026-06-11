@@ -278,37 +278,6 @@ a:hover {
   to   { transform: rotate(360deg); }
 }
 
-/* ================================================================
-   亮色主题
-   ================================================================ */
-[data-theme="light"] {
-  --bg-primary: #e8ecf2;
-  --bg-secondary: #dde3ea;
-  --bg-tertiary: #d0d6de;
-  --border: #b0bccc;
-  --border-light: rgba(74, 100, 160, 0.25);
-  --text-primary: #1a2233;
-  --text-secondary: #3a4a60;
-  --text-muted: #6a7a90;
-  --accent: #2563b0;
-  --accent-glow: rgba(37, 99, 176, 0.2);
-  --accent-glow-strong: rgba(37, 99, 176, 0.35);
-  --accent-cyan: #0077aa;
-  --accent-cyan-glow: rgba(0, 119, 170, 0.25);
-  --glass-bg: rgba(220, 228, 238, 0.65);
-  --glass-border: rgba(74, 100, 160, 0.18);
-  --glass-bg-hover: rgba(200, 212, 228, 0.8);
-}
-
-[data-theme="light"] .glass-panel {
-  background: rgba(220, 228, 238, 0.65);
-  border-color: rgba(74, 100, 160, 0.18);
-}
-[data-theme="light"] .glass-panel:hover {
-  background: rgba(200, 212, 228, 0.8);
-  border-color: rgba(74, 100, 160, 0.4);
-}
-
 /* ---------- 响应式 ---------- */
 @media (max-width: 768px) {
   :root { font-size: 14px; }

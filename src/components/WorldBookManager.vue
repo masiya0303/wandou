@@ -93,7 +93,7 @@ const activeEnabledCount = computed(() => activeEntries.value.filter((e: any) =>
           <span class="bk-icon">🌐</span>
           <div class="bk-info">
             <span class="bk-name">全局世界书</span>
-            <span class="bk-meta">{{ store.globalWorldBook.filter(e => e.enabled).length }}/{{ store.globalWorldBook.length }} 条 · 所有世界生效</span>
+            <span class="bk-meta">{{ store.globalWorldBook.filter((e: any) => e.enabled).length }}/{{ store.globalWorldBook.length }} 条 · 所有世界生效</span>
           </div>
           <span class="bk-arrow">→</span>
         </button>
