@@ -58,6 +58,7 @@ const DEFAULT_SYSTEM_PROMPT = `你是《豌豆星际漂流》的 AI 叙事引擎
 
 export const useGameStore = defineStore('game', () => {
   // ---------- 状态 ----------
+  const storeReady = ref(false)   // IndexedDB 初始化完成
   const phase = ref<GamePhase>('start')
   const apiConfig = ref<ApiConfig>({ ...DEFAULT_API })
   const character = ref<CharacterInfo>({ ...DEFAULT_CHARACTER })
@@ -86,6 +87,8 @@ export const useGameStore = defineStore('game', () => {
       hasSave.value = !!raw
     } catch {
       hasSave.value = false
+    } finally {
+      storeReady.value = true
     }
   }
 
@@ -309,7 +312,7 @@ export const useGameStore = defineStore('game', () => {
 
   return {
     // state
-    phase, apiConfig, character, systemPrompt, messages,
+    storeReady, phase, apiConfig, character, systemPrompt, messages,
     isGenerating, settingsTab, error, hasSave,
     worldBook, worldBookEnabled,
 
