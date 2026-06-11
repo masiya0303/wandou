@@ -8,7 +8,7 @@ import type { ApiConfig, GameMessage, CharacterInfo } from '../types/game'
 import type { WorldBookEntry } from '../types/worldBook'
 import type { World, WorldMeta, InventoryItem, Quest } from '../types/world'
 import type { NpcEntry } from '../types/npc'
-import { chatStream } from '../utils/api'
+import { chatStream, abortGeneration } from '../utils/api'
 import { scanAndCollect, extractRecentText, PRESET_WORLD_BOOK } from '../utils/worldBookEngine'
 import { scanNpcs, importNpcJson } from '../utils/npcEngine'
 import { storage } from '../utils/storage'
@@ -216,7 +216,7 @@ export const useGameStore = defineStore('game', () => {
     addNpcEntries, removeNpc, toggleNpc, importNpcsFromJson,
     addGlobalWorldBookEntries, removeGlobalWorldBookEntry, toggleGlobalWorldBookEntry, resetGlobalWorldBook,
     addWorldBookEntries, removeWorldBookEntry, toggleWorldBookEntry, resetWorldBook, loadWorldBookOnly,
-    sendMessage, regenerate, clearMessages, syncSave, autoSave, hasSave,
+    sendMessage, regenerate, clearMessages, syncSave, autoSave, hasSave, stopGeneration: abortGeneration,
     addItem, removeItem, updateItemQuantity, addQuest, removeQuest, updateQuestStatus,
     startPlaying, exportWorld, exportAllWorlds,
     updateApiConfig, updateCharacter, updateSystemPrompt,
