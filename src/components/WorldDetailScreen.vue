@@ -8,7 +8,6 @@ import { useGameStore } from '../stores/gameStore'
 import type { WorldBookEntry } from '../types/worldBook'
 import { importWorldBook } from '../utils/worldBookEngine'
 import { importNpcJson } from '../utils/npcEngine'
-import { sound } from '../utils/sound'
 
 const store = useGameStore()
 const error = ref('')
@@ -111,7 +110,6 @@ async function handleDeleteWorld() {
 }
 
 function handleExport() {
-  sound.click()
   const json = store.exportWorld()
   if (!json) { error.value = '导出失败'; return }
   const blob = new Blob([json], { type: 'application/json' })

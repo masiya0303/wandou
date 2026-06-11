@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useGameStore } from './stores/gameStore'
-import { sound } from './utils/sound'
 import StartScreen from './components/StartScreen.vue'
 import WorldListScreen from './components/WorldListScreen.vue'
 import WorldDetailScreen from './components/WorldDetailScreen.vue'
@@ -11,7 +10,7 @@ import SettingsPanel from './components/SettingsPanel.vue'
 const store = useGameStore()
 const showSettings = ref(false)
 
-function onEsc() { if (showSettings.value) { showSettings.value = false; sound.toggle() } }
+function onEsc() { if (showSettings.value) showSettings.value = false }
 onMounted(() => window.addEventListener('wandou:esc', onEsc))
 onUnmounted(() => window.removeEventListener('wandou:esc', onEsc))
 </script>
