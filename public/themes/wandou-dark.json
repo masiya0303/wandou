@@ -1,0 +1,23 @@
+{
+  "name": "wandou暗色",
+  "main_text_color": "#e0e8ff",
+  "italics_text_color": "#88c8e8",
+  "quote_text_color": "#8ba4c0",
+  "chat_tint_color": "rgba(255, 255, 255, 0.04)",
+  "user_mes_blur_tint_color": "rgba(255, 255, 255, 0.85)",
+  "bot_mes_blur_tint_color": "rgba(255, 255, 255, 0.75)",
+  "shadow_color": "rgba(0, 0, 0, 0.08)",
+  "shadow_width": 0,
+  "border_color": "rgba(255, 255, 255, 0.06)",
+  "font_scale": 1.0,
+  "chat_width": 55,
+  "bubble_bg": "rgba(255,255,255,0.75)",
+  "bubble_border": "1px solid rgba(255,255,255,0.1)",
+  "bubble_radius": "12px",
+  "accent_color": "#22d3ee",
+  "accent_light": "rgba(34,211,238,0.3)",
+  "accent_ice": "rgba(34,211,238,0.1)",
+  "input_bg": "rgba(255,255,255,0.7)",
+  "input_border": "1px solid rgba(0,0,0,0.08)",
+  "sidebar_color": "rgba(34,211,238,0.3)"
+}

@@ -1,0 +1,23 @@
+{
+  "name": "bjd粉色",
+  "main_text_color": "rgba(112, 88, 98, 0.81)",
+  "italics_text_color": "rgba(216, 120, 138, 1)",
+  "quote_text_color": "rgba(255, 62, 123, 0.75)",
+  "chat_tint_color": "rgba(255, 255, 255, 0)",
+  "user_mes_blur_tint_color": "rgba(255, 255, 255, 1)",
+  "bot_mes_blur_tint_color": "rgba(255, 255, 255, 1)",
+  "shadow_color": "rgba(255, 255, 255, 1)",
+  "shadow_width": 2,
+  "border_color": "rgba(255, 255, 255, 0)",
+  "font_scale": 0.85,
+  "chat_width": 55,
+  "bubble_bg": "linear-gradient(145deg, #ffffff, #ffe6f2)",
+  "bubble_border": "3px solid #ffe6ee",
+  "bubble_radius": "20px",
+  "accent_color": "#ff80a8",
+  "accent_light": "#ffccdc",
+  "accent_ice": "#ffe6ee",
+  "input_bg": "linear-gradient(180deg, #ffffff, #ffe6ee)",
+  "input_border": "4px solid #ffe6ee",
+  "sidebar_color": "#ff80a8"
+}

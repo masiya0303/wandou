@@ -30,6 +30,7 @@ const DEFAULT_PROMPT = `
 export const useGameStore = defineStore('game', () => {
   const storeReady = ref(false)
   const phase = ref<GamePhase>('start')
+  const themeId = ref(localStorage.getItem('wandou_theme') || 'bjd-pink')
   const previousPhase = ref<GamePhase>('start')
   const apiConfig = ref<ApiConfig>({ ...DEFAULT_API })
   const systemPrompt = ref(DEFAULT_PROMPT)
@@ -66,6 +67,7 @@ export const useGameStore = defineStore('game', () => {
   async function initStore() {
     globalWorldBook.value = storage.getGlobalWorldBook().length > 0 ? storage.getGlobalWorldBook() : structuredClone(PRESET_WORLD_BOOK)
     worldList.value = storage.getWorldList()
+    await applyTheme(themeId.value)
     storeReady.value = true
   }
 
@@ -202,11 +204,29 @@ export const useGameStore = defineStore('game', () => {
   function updateCharacter(c: Partial<CharacterInfo>) { Object.assign(character.value, c) }
   function updateSystemPrompt(p: string) { systemPrompt.value = p }
 
+  async function applyTheme(id: string) {
+    try {
+      const resp = await fetch(`/themes/${id}.json`)
+      if (!resp.ok) return
+      const t = await resp.json()
+      const root = document.documentElement.style
+      root.setProperty('--pink-primary', t.main_text_color)
+      root.setProperty('--pink-accent', t.accent_color)
+      root.setProperty('--pink-light', t.accent_light)
+      root.setProperty('--pink-ice', t.accent_ice)
+      root.setProperty('--pink-italic', t.italics_text_color)
+      root.setProperty('--pink-bubble-bg', t.bubble_bg)
+      root.setProperty('--pink-input-bg', t.input_bg)
+      themeId.value = id
+      localStorage.setItem('wandou_theme', id)
+    } catch {}
+  }
+
 
   async function loadWorldBookOnly(id: string): Promise<boolean> { const data = storage.getWorld(id); if (!data?.world) return false; worldBook.value = data.world.worldBook || []; worldBookEnabled.value = data.world.worldBookEnabled !== false; worldName.value = data.world.name || ''; currentWorldId.value = id; return true }
 
   return {
-    storeReady, phase, previousPhase, apiConfig, systemPrompt,
+    storeReady, phase, previousPhase, apiConfig, systemPrompt, themeId,
     worldList, currentWorldId, worldName, worldDescription, character, messages, npcs, inventory, quests,
     globalWorldBook, globalWorldBookEnabled, worldBook, worldBookEnabled,
     isGenerating, error,
@@ -219,6 +239,6 @@ export const useGameStore = defineStore('game', () => {
     sendMessage, regenerate, clearMessages, syncSave, autoSave, hasSave, stopGeneration: abortGeneration,
     addItem, removeItem, updateItemQuantity, addQuest, removeQuest, updateQuestStatus,
     startPlaying, exportWorld, exportAllWorlds,
-    updateApiConfig, updateCharacter, updateSystemPrompt,
+    updateApiConfig, updateCharacter, updateSystemPrompt, applyTheme,
   }
 })

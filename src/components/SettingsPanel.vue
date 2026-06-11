@@ -30,6 +30,7 @@ const CARDS = [
   { key: 'api', icon: '🔌', cn: 'API 配置', en: 'API CONFIG', desc: 'LLM 接口、密钥、模型' },
   { key: 'prompt', icon: '📜', cn: '系统提示词', en: 'SYSTEM PROMPT', desc: 'AI 世界观、风格和行为' },
   { key: 'worldbook', icon: '📖', cn: '全局世界书', en: 'GLOBAL WB', desc: '所有世界通用的背景知识' },
+  { key: 'theme', icon: '🎨', cn: '聊天主题', en: 'THEME', desc: store.themeId === 'bjd-pink' ? '当前：bjd粉色' : '当前：wandou暗色' },
 ]
 
 function goBack() { page.value = null }
@@ -47,7 +48,7 @@ function goBack() { page.value = null }
       </header>
 
       <div class="card-grid">
-        <button v-for="c in CARDS" :key="c.key" class="s-card glass-panel corner-deco" @click="page = c.key">
+        <button v-for="c in CARDS" :key="c.key" class="s-card glass-panel corner-deco" @click="c.key === 'theme' ? store.applyTheme(store.themeId === 'bjd-pink' ? 'wandou-dark' : 'bjd-pink') : (page = c.key)">
           <span class="s-icon">{{ c.icon }}</span>
           <div class="s-labels"><span class="s-cn">{{ c.cn }}</span><span class="s-en">{{ c.en }}</span></div>
           <p class="s-desc">{{ c.desc }}</p>
