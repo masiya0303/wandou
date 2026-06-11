@@ -138,7 +138,7 @@ const activeEnabledCount = computed(() => activeEntries.value.filter((e: any) =>
 .fb { font-size: 0.6rem; color: var(--success); }
 .fb.w { color: var(--warning); }
 .empty { text-align: center; padding: 1rem; font-size: 0.7rem; color: var(--text-muted); }
-.list { display: flex; flex-direction: column; gap: 0.3rem; max-height: 300px; overflow-y: auto; }
+.list { display: flex; flex-direction: column; gap: 0.3rem; }
 .card { padding: 0.4rem 0.5rem; border-radius: 8px; transition: all 0.15s; }
 .card.off { opacity: 0.4; }
 .card:hover:not(.off) { background: var(--glass-bg-hover); }
