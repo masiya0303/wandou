@@ -64,8 +64,8 @@ function handleSettings() { emit('openSettings') }
 </template>
 
 <style scoped>
-.start-screen { height: 100vh; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
-.bg-base { position: fixed; inset: 0; z-index: -4; background: rgba(8,14,24,0.2); }
+.start-screen { height: 100vh; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; background: transparent; }
+.bg-base { position: fixed; inset: 0; z-index: -4; background: radial-gradient(ellipse at 30% 20%, rgba(10,40,80,0.3) 0%, transparent 60%), linear-gradient(180deg, #0a0a1a 0%, #0d1b2a 40%, #111d2d 100%); }
 .bg-orbs { position: fixed; inset: 0; z-index: -3; pointer-events: none; overflow: hidden; }
 .orb { position: absolute; border-radius: 50%; filter: blur(80px); animation: orb-pulse 8s ease-in-out infinite; }
 .orb-cyan  { width: 400px; height: 400px; top: 10%; right: 15%; background: rgba(0,229,255,0.08); }
