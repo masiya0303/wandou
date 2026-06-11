@@ -416,7 +416,12 @@ ${worldDescription.value ? worldDescription.value.slice(0, 200) + '...' : ''}
   }
 
   // ============ 设置 ============
-  function updateApiConfig(c: Partial<ApiConfig>) { Object.assign(apiConfig.value, c) }
+  function updateApiConfig(c: Partial<ApiConfig>) {
+    if (c.apiKey !== undefined) c.apiKey = c.apiKey.trim()
+    if (c.baseUrl !== undefined) c.baseUrl = c.baseUrl.trim()
+    if (c.model !== undefined) c.model = c.model.trim()
+    Object.assign(apiConfig.value, c)
+  }
   function updateCharacter(c: Partial<CharacterInfo>) { Object.assign(character.value, c) }
   function updateSystemPrompt(p: string) { systemPrompt.value = p }
 
