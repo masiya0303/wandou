@@ -8,7 +8,14 @@ const store = useGameStore()
 const emit = defineEmits<{ back: [] }>()
 
 async function handleEnter(id: string) {
-  await store.openWorldDetailFromList(id)
+  const ok = await store.openWorldDetailFromList(id)
+  if (ok) {
+    // 已有角色 → 直接进游戏；首次 → 进详情页配置
+    if (store.character.name) {
+      store.phase = 'playing'
+    }
+    // else: 留在 worldDetail 页面
+  }
 }
 
 async function handleDelete(id: string, name: string) {
