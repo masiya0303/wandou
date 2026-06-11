@@ -1,7 +1,4 @@
-<!-- ============================================================
- wandou v1.2 — 游戏主界面
- 扫描线 + 顶栏 + 聊天 + 输入 + 浮球导航
-============================================================ -->
+<!-- wandou · 游戏主界面 -->
 <script setup lang="ts">
 import { useGameStore } from '../stores/gameStore'
 import ChatPanel from './ChatPanel.vue'
@@ -15,18 +12,16 @@ async function goHome() { await store.autoSave(); store.phase = 'start' }
 </script>
 
 <template>
-  <div class="game-main">
-    <div class="scanline-overlay"></div>
-
-    <header class="top-bar glass-panel">
-      <div class="top-left">
-        <img src="/home.svg" alt="" class="h-icon" @click="goHome()" />
-        <span class="logo-cn">{{ store.worldName || '豌豆号' }}</span>
-      </div>
-      <div class="top-right">
-        <img src="/world.svg" alt="" class="h-icon" @click="store.goToWorldDetail()" title="世界管理" />
-        <img src="/search.svg" alt="" class="h-icon" @click="emit('openSettings')" title="设置" />
-      </div>
+  <div class="game">
+    <header class="bar">
+      <span class="bar-left">
+        <button class="bar-btn" @click="goHome" title="主菜单">🏠</button>
+        <span class="bar-title">{{ store.worldName || '豌豆号' }}</span>
+      </span>
+      <span class="bar-right">
+        <button class="bar-btn" @click="store.goToWorldDetail()" title="世界管理">📋</button>
+        <button class="bar-btn" @click="emit('openSettings')" title="设置">⚙️</button>
+      </span>
     </header>
 
     <ChatPanel />
@@ -36,21 +31,26 @@ async function goHome() { await store.autoSave(); store.phase = 'start' }
 </template>
 
 <style scoped>
-.game-main {
+.game {
   display: flex; flex-direction: column; height: 100vh;
-  background:
-    radial-gradient(ellipse at 50% 0%, rgba(20,60,100,0.12) 0%, transparent 60%),
-    linear-gradient(180deg, #0a0a1a 0%, #0d1b2a 40%, #0f1d2d 100%);
+  background: var(--bg-primary);
   position: relative; overflow: hidden;
 }
 
-.top-bar {
+.bar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0.5rem 0.8rem; border-radius: 0; z-index: 20; flex-shrink: 0;
-  border-left: none; border-right: none; border-top: none;
+  padding: 0 14px; height: 44px; flex-shrink: 0; z-index: 20;
+  border-bottom: 1px solid var(--border);
+  background: rgba(8,14,24,0.95);
 }
-.top-left, .top-right { display: flex; align-items: center; gap: 0.5rem; }
-.logo-cn { font-size: var(--font-sm); font-weight: 700; color: #90b8e0; }
-.h-icon { width: 22px; height: 22px; opacity: 0.6; cursor: pointer; transition: opacity 0.2s; }
-.h-icon:active { opacity: 1; transform: scale(0.92); }
+.bar-left, .bar-right { display: flex; align-items: center; gap: 8px; }
+.bar-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.bar-btn {
+  width: 30px; height: 30px; border-radius: 8px;
+  border: 1px solid var(--glass-border); background: var(--glass-bg);
+  color: var(--text-secondary); font-size: 14px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.bar-btn:active { transform: scale(0.94); background: var(--glass-bg-hover); }
 </style>
