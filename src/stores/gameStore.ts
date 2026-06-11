@@ -44,6 +44,7 @@ export const useGameStore = defineStore('game', () => {
   // ---- 全局状态 ----
   const storeReady = ref(false)
   const phase = ref<GamePhase>('start')
+  const previousPhase = ref<GamePhase>('start')  // 记录上一个 phase，用于返回
   const apiConfig = ref<ApiConfig>({ ...DEFAULT_API })
   const systemPrompt = ref(DEFAULT_SYSTEM_PROMPT)
 
@@ -270,6 +271,7 @@ export const useGameStore = defineStore('game', () => {
   }
 
   async function openWorldDetail(id: string): Promise<boolean> {
+    previousPhase.value = phase.value
     const ok = await _loadWorld(id)
     if (ok) phase.value = 'worldDetail'
     return ok
@@ -480,7 +482,7 @@ ${worldDescription.value ? worldDescription.value.slice(0, 200) + '...' : ''}
 
   // ----导出----
   return {
-    storeReady, phase, apiConfig, systemPrompt,
+    storeReady, phase, previousPhase, apiConfig, systemPrompt,
     worldList, currentWorldId,
     worldName, worldDescription, character, messages, npcs,
     globalWorldBook, globalWorldBookEnabled, worldBook, worldBookEnabled,

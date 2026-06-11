@@ -74,7 +74,15 @@ async function handleDeleteWorld() {
   store.phase = 'worldList'
 }
 
-function goBack() { store.phase = 'worldList' }
+function goBack() {
+  // 回到之前来的地方
+  const prev = store.previousPhase
+  if (prev === 'playing') {
+    store.phase = 'playing'
+  } else {
+    store.phase = 'worldList'
+  }
+}
 </script>
 
 <template>
@@ -173,7 +181,7 @@ function goBack() { store.phase = 'worldList' }
 </template>
 
 <style scoped>
-.screen { min-height: 100vh; position: relative; overflow-y: auto; }
+.screen { height: 100vh; position: relative; overflow-y: auto; overflow-x: hidden; }
 .bg-base { position: fixed; inset: 0; z-index: -4;
   background: radial-gradient(ellipse at 30% 20%, rgba(10,40,80,0.3) 0%, transparent 60%),
               linear-gradient(180deg, #0a0a1a 0%, #0d1b2a 40%, #111d2d 100%); }
