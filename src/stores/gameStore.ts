@@ -215,6 +215,9 @@ export const useGameStore = defineStore('game', () => {
     root.setProperty('--pink-bubble-bg', t.bubble_bg || '')
     root.setProperty('--pink-input-bg', t.input_bg || '')
     root.setProperty('--font-scale', t.font_scale != null ? String(t.font_scale) : '1')
+    if (t.chat_bg_url) root.setProperty('--theme-chat-bg', `url(${t.chat_bg_url})`)
+    if (t.panel_bg_url) root.setProperty('--theme-panel-bg', `url(${t.panel_bg_url})`)
+    if (t.bubble_bg_url) root.setProperty('--theme-bubble-bg', `url(${t.bubble_bg_url})`)
   }
 
   async function applyTheme(id: string) {

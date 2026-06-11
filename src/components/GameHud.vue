@@ -81,7 +81,7 @@ const doneQ = computed(() => store.quests.filter((q: Quest) => q.status === 'com
 
 <style scoped>
 /* panel */
-.panel { position: absolute; bottom: 48px; left: 0; right: 0; top: 44px; z-index: 10; border-radius: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--pink-input-bg); }
+.panel { position: absolute; bottom: 48px; left: 0; right: 0; top: 44px; z-index: 10; border-radius: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--theme-panel-bg) center/cover no-repeat, rgba(255,255,255,0.85); background-blend-mode: overlay; }
 .panel-top { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--pink-ice); flex-shrink: 0; }
 .panel-title { font-size: 15px; font-weight: 600; color: var(--pink-primary); }
 .panel-close { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--pink-light); background: none; color: var(--pink-primary); cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center; }

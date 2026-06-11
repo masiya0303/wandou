@@ -70,7 +70,7 @@ function time(ts: number) { return new Date(ts).toLocaleTimeString('zh-CN', { ho
 </template>
 
 <style scoped>
-.chat { flex: 1; overflow-y: auto; padding: 20px 20px 8px; }
+.chat { flex: 1; overflow-y: auto; padding: 20px 20px 8px; background-image: var(--theme-chat-bg); background-size: cover; background-attachment: fixed; background-position: center; }
 
 /* scrollbar pink */
 .chat::-webkit-scrollbar { width: 4px; }
@@ -117,6 +117,7 @@ function time(ts: number) { return new Date(ts).toLocaleTimeString('zh-CN', { ho
   padding: 14px 18px;
   color: var(--pink-primary);
   font-family: inherit;
+  background: var(--theme-bubble-bg) center/cover no-repeat, var(--pink-bubble-bg);
 }
 .user-body { max-width: 85%; }
 

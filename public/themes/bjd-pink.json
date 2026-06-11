@@ -23,5 +23,8 @@
   "accent_ice": "#ffe6ee",
   "input_bg": "linear-gradient(180deg, #ffffff, #ffe6ee)",
   "input_border": "4px solid #ffe6ee",
-  "sidebar_color": "#ff80a8"
+  "sidebar_color": "#ff80a8",
+  "chat_bg_url": "https://files.catbox.moe/kak943.jpeg",
+  "panel_bg_url": "https://files.catbox.moe/im5vzu.jpeg",
+  "bubble_bg_url": "https://files.catbox.moe/dirxg3.jpeg"
 }
