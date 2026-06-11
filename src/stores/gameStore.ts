@@ -207,17 +207,41 @@ export const useGameStore = defineStore('game', () => {
 
   function _applyThemeObject(t: any) {
     const root = document.documentElement.style
-    root.setProperty('--pink-primary', t.main_text_color || '')
-    root.setProperty('--pink-accent', t.accent_color || '')
-    root.setProperty('--pink-light', t.accent_light || '')
-    root.setProperty('--pink-ice', t.accent_ice || '')
-    root.setProperty('--pink-italic', t.italics_text_color || '')
-    root.setProperty('--pink-bubble-bg', t.bubble_bg || '')
-    root.setProperty('--pink-input-bg', t.input_bg || '')
+    // 主文字色
+    const mainColor = t.main_text_color || t['--theme-text-main'] || ''
+    root.setProperty('--pink-primary', mainColor)
+    // 强调色：优先 accent_color，否则用黄色调和浅色
+    const accent = t.accent_color || t['--theme-yellow-main'] || mainColor || ''
+    const light = t.accent_light || t['--theme-yellow-light'] || t.blur_tint_color || ''
+    const ice = t.accent_ice || t['--theme-cream-white'] || t.blur_tint_color || ''
+    const italic = t.italics_text_color || t['--theme-text-secondary'] || ''
+    root.setProperty('--pink-accent', accent)
+    root.setProperty('--pink-light', light)
+    root.setProperty('--pink-ice', ice)
+    root.setProperty('--pink-italic', italic)
+    // 气泡背景
+    const bubble = t.bubble_bg || t.user_mes_blur_tint_color || t.bot_mes_blur_tint_color || ''
+    const input = t.input_bg || t.chat_tint_color || t.blur_tint_color || ''
+    root.setProperty('--pink-bubble-bg', bubble)
+    root.setProperty('--pink-input-bg', input)
+    // 字体缩放
     root.setProperty('--font-scale', t.font_scale != null ? String(t.font_scale) : '1')
-    if (t.chat_bg_url) { root.setProperty('--theme-chat-bg', `url(${t.chat_bg_url})`); root.setProperty('--theme-bg-url', t.chat_bg_url) }
-    if (t.panel_bg_url) root.setProperty('--theme-panel-bg', `url(${t.panel_bg_url})`)
+    // 背景图 URL：从 chat_bg_url / 或 custom_css 里提取 url(...)
+    const bgUrl = t.chat_bg_url || t.panel_bg_url || extractFirstUrl(t.custom_css)
+    if (bgUrl) {
+      root.setProperty('--theme-chat-bg', `url(${bgUrl})`)
+      root.setProperty('--theme-panel-bg', `url(${bgUrl})`)
+    }
+    // 气泡纹理
     if (t.bubble_bg_url) root.setProperty('--theme-bubble-bg', `url(${t.bubble_bg_url})`)
+    else if (t.chat_bg_url) root.setProperty('--theme-bubble-bg', `url(${t.chat_bg_url})`)
+  }
+
+  // 从 custom_css 字符串里提取第一个 url('...') 作为背景图
+  function extractFirstUrl(css: string | undefined): string {
+    if (!css || typeof css !== 'string') return ''
+    const m = css.match(/url\(['"]?([^)'"]+)['"]?\)/)
+    return m ? m[1] : ''
   }
 
   async function applyTheme(id: string) {

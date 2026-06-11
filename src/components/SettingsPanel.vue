@@ -33,7 +33,6 @@ async function handleSaveGame() {
 
 function themeDesc() {
   if (store.themeId === 'bjd-pink') return '当前：bjd粉色'
-  if (store.themeId === 'wandou-dark') return '当前：wandou暗色'
   return '当前：自定义主题'
 }
 
@@ -120,7 +119,7 @@ function goBack() { page.value = null }
 
           <div style="display:flex;gap:10px;margin-bottom:16px">
             <button class="theme-btn" :class="{active:store.themeId==='bjd-pink'}" @click="store.applyTheme('bjd-pink')">🎀 bjd粉色</button>
-            <button class="theme-btn" :class="{active:store.themeId==='wandou-dark'}" @click="store.applyTheme('wandou-dark')">🌑 wandou暗色</button>
+            <span style="font-size:12px;color:var(--pink-primary);opacity:0.5;align-self:center">默认预设</span>
           </div>
 
           <hr style="border:1px solid var(--pink-ice);margin:0 0 16px" />
