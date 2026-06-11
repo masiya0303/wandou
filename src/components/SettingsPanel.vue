@@ -45,6 +45,7 @@ const CARDS = [
 
   { key: 'prompt', icon: '📜', cn: '系统提示词', en: 'SYSTEM PROMPT', desc: '定义 AI 的世界观、风格和行为' },
   { key: 'worldbook', icon: '📖', cn: '全局世界书', en: 'GLOBAL WORLD BOOK', desc: '适用于所有世界的通用背景知识库' },
+  { key: 'theme', icon: store.theme === 'dark' ? '🌙' : '☀️', cn: '切换主题', en: 'THEME', desc: store.theme === 'dark' ? '当前：暗色模式' : '当前：亮色模式' },
 ]
 
 function goBack() { page.value = null }
@@ -77,7 +78,7 @@ function goBack() { page.value = null }
         <button
           v-for="card in CARDS" :key="card.key"
           class="settings-card glass-panel corner-deco"
-          @click="page = card.key"
+          @click="card.key === 'theme' ? store.toggleTheme() : (page = card.key)"
         >
           <span class="card-icon">{{ card.icon }}</span>
           <div class="card-labels">

@@ -1,37 +1,25 @@
 // ============================================================
-// wandou v0.6 — 豌豆星际漂流 · 入口
-// 先初始化 IndexedDB，再挂载 App
+// wandou v1.0 — 入口
+// PWA + 主题 + 全局快捷键 + localStorage 持久化
 // ============================================================
-
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import './style.css'
-import { useGameStore } from './stores/gameStore'
 
-async function bootstrap() {
-  const app = createApp(App)
-  const pinia = createPinia()
-  app.use(pinia)
+const app = createApp(App)
+app.use(createPinia())
+app.mount('#app')
 
-  // 先挂载（显示 loading），再异步初始化
-  app.mount('#app')
-
-  // 异步检查 IndexedDB 存档
-  const store = useGameStore()
-  await store.initStore()
-
-  // 退出前同步保存（async 在 beforeunload 里来不及）
-  window.addEventListener('beforeunload', () => {
-    if (store.phase === 'playing' && store.messages.length > 0) {
-      store.syncSave()
-    }
-  })
-  window.addEventListener('pagehide', () => {
-    if (store.phase === 'playing' && store.messages.length > 0) {
-      store.syncSave()
-    }
-  })
+// PWA service worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {})
 }
 
-bootstrap()
+// 全局快捷键
+window.addEventListener('keydown', (e: KeyboardEvent) => {
+  if (e.key === 'Escape') {
+    // 关闭设置面板: App.vue listens for esc
+    window.dispatchEvent(new CustomEvent('wandou:esc'))
+  }
+})

@@ -1,0 +1,13 @@
+{
+  "name": "豌豆星际漂流",
+  "short_name": "豌豆",
+  "description": "AI 驱动的星际文字冒险游戏",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a1a",
+  "theme_color": "#0d1b2a",
+  "icons": [
+    { "src": "/pwa-icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/pwa-icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

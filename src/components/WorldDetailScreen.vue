@@ -7,6 +7,7 @@ import { ref } from 'vue'
 import { useGameStore } from '../stores/gameStore'
 import { importWorldBook } from '../utils/worldBookEngine'
 import { importNpcJson } from '../utils/npcEngine'
+import { sound } from '../utils/sound'
 
 const store = useGameStore()
 const error = ref('')
@@ -80,6 +81,16 @@ async function handleDeleteWorld() {
   store.phase = 'worldList'
 }
 
+function handleExport() {
+  sound.click()
+  const json = store.exportWorld()
+  if (!json) { error.value = '导出失败'; return }
+  const blob = new Blob([json], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a'); a.href = url; a.download = `${store.worldName || 'world'}.json`; a.click()
+  URL.revokeObjectURL(url)
+}
+
 async function goBack() {
   saving.value = true
   store.updateWorldInfo(editName.value.trim() || store.worldName, editDesc.value.trim())
@@ -150,6 +161,7 @@ async function goBack() {
       <p v-if="error" class="err">{{ error }}</p>
       <div class="bottom">
         <button class="btn-enter corner-deco" @click="handleEnterGame" :disabled="saving"><span class="cn">{{ saving ? '⏳ 保存中...' : '🚀 启程' }}</span><span class="en">START ADVENTURE</span></button>
+        <button class="btn-exp" @click="handleExport">📤 导出世界</button>
         <button class="btn-del" @click="handleDeleteWorld">🗑️ 删除世界</button>
       </div>
     </div>
@@ -211,6 +223,8 @@ async function goBack() {
 .btn-enter:disabled { opacity: 0.5; }
 .btn-enter .cn { font-size: 0.9rem; font-weight: 600; }
 .btn-enter .en { font-size: 0.5rem; letter-spacing: 0.15em; color: var(--accent-cyan); }
+.btn-exp { padding: 0.3rem 0.8rem; border: 1px solid var(--accent-cyan); border-radius: 5px; background: rgba(0,229,255,0.06); color: var(--accent-cyan); font-size: 0.7rem; cursor: pointer; font-family: inherit; margin-bottom: 0.3rem; }
+.btn-exp:hover { background: rgba(0,229,255,0.15); }
 .btn-del { padding: 0.3rem 0.8rem; border: 1px solid #5f1e1e; border-radius: 5px; background: transparent; color: #8b4a4a; font-size: 0.7rem; cursor: pointer; font-family: inherit; }
 .btn-del:hover { background: rgba(120,30,30,0.25); color: #e66; }
 </style>

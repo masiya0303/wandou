@@ -14,6 +14,15 @@ const store = useGameStore()
 const view = ref('list')
 
 const loadingBook = ref(false)
+const searchText = ref('')
+
+const filteredEntries = computed(() => {
+  const q = searchText.value.toLowerCase().trim()
+  if (!q) return activeEntries.value
+  return activeEntries.value.filter((e: any) =>
+    (e.comment || '').toLowerCase().includes(q) || e.keys.some((k: string) => k.toLowerCase().includes(q)) || e.content.toLowerCase().includes(q)
+  )
+})
 
 async function openBook(target: string) {
   if (target !== 'global') {
@@ -117,6 +126,9 @@ const activeEnabledCount = computed(() => activeEntries.value.filter((e: any) =>
         </div>
 
         <div class="bar">
+          <input v-model="searchText" class="search-fi" placeholder="搜索关键词..." />
+        </div>
+        <div class="bar">
           <button class="act" @click="showImport = !showImport">📥 导入</button>
           <button class="act" @click="fileInput?.click()">📁 文件</button>
           <input ref="fileInput" type="file" accept=".json" style="display:none" @change="onFile" />
@@ -136,7 +148,7 @@ const activeEnabledCount = computed(() => activeEntries.value.filter((e: any) =>
 
         <div v-if="activeEntries.length === 0" class="empty">📭 暂无条目</div>
         <div class="list">
-          <div v-for="e in activeEntries" :key="e.id" :class="['card glass-panel corner-deco', { off: !e.enabled }]">
+          <div v-for="e in filteredEntries" :key="e.id" :class="['card glass-panel corner-deco', { off: !e.enabled }]">
             <div class="r1">
               <button class="tg" @click="toggle(e.id)">{{ e.enabled ? '✅' : '⛔' }}</button>
               <div class="i">
@@ -186,6 +198,8 @@ const activeEnabledCount = computed(() => activeEntries.value.filter((e: any) =>
 .btn-back:hover { border-color: var(--accent); color: var(--text-primary); }
 
 .bar { display: flex; gap: 0.3rem; }
+.search-fi { flex: 1; padding: 0.25rem 0.4rem; border: 1px solid var(--border); border-radius: 4px; background: rgba(8,16,28,0.6); color: var(--text-primary); font-size: 0.65rem; font-family: inherit; }
+.search-fi:focus { outline: none; border-color: var(--accent-cyan); }
 .act { padding: 0.25rem 0.55rem; border-radius: 5px; border: 1px solid var(--glass-border); background: var(--glass-bg); color: var(--text-secondary); font-size: 0.65rem; cursor: pointer; font-family: inherit; }
 .act:hover { border-color: var(--accent); color: var(--text-primary); }
 .go { background: rgba(0,229,255,0.08); border-color: rgba(0,229,255,0.25); color: var(--accent-cyan); }

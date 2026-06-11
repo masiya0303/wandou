@@ -1,10 +1,7 @@
-<!-- ============================================================
- wandou v0.9 — 根组件
- phase: start | worldList | worldDetail | playing
-============================================================ -->
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useGameStore } from './stores/gameStore'
+import { sound } from './utils/sound'
 import StartScreen from './components/StartScreen.vue'
 import WorldListScreen from './components/WorldListScreen.vue'
 import WorldDetailScreen from './components/WorldDetailScreen.vue'
@@ -13,6 +10,10 @@ import SettingsPanel from './components/SettingsPanel.vue'
 
 const store = useGameStore()
 const showSettings = ref(false)
+
+function onEsc() { if (showSettings.value) { showSettings.value = false; sound.toggle() } }
+onMounted(() => window.addEventListener('wandou:esc', onEsc))
+onUnmounted(() => window.removeEventListener('wandou:esc', onEsc))
 </script>
 
 <template>
@@ -26,5 +27,5 @@ const showSettings = ref(false)
 </template>
 
 <style scoped>
-.app-root { width: 100%; min-height: 100vh; background: #0a0a1a; }
+.app-root { width: 100%; min-height: 100vh; background: var(--bg-primary); color: var(--text-primary); }
 </style>

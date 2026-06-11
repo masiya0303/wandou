@@ -5,6 +5,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useGameStore } from '../stores/gameStore'
+import { sound } from '../utils/sound'
 
 const store = useGameStore()
 const input = ref('')
@@ -12,10 +13,12 @@ const textareaRef = ref<HTMLTextAreaElement | null>(null)
 
 function handleSubmit() {
   if (!input.value.trim() || store.isGenerating) return
+  sound.send()
   store.sendMessage(input.value)
   input.value = ''
 }
 function handleKeydown(e: KeyboardEvent) {
+  // Enter 发送 / Shift+Enter 换行 / Ctrl+Enter 也发送
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit() }
 }
 function autoResize() {
