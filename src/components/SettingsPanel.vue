@@ -6,7 +6,6 @@
 import { ref, computed } from 'vue'
 import { useGameStore } from '../stores/gameStore'
 import WorldBookManager from './WorldBookManager.vue'
-import NpcManager from './NpcManager.vue'
 
 const store = useGameStore()
 const emit = defineEmits<{ close: [] }>()
@@ -49,8 +48,7 @@ const CARDS = [
   { key: 'api', icon: '🔌', cn: 'API 配置', en: 'API CONFIG', desc: 'LLM 接口地址、密钥、模型参数' },
   { key: 'character', icon: '👤', cn: '角色信息', en: 'CHARACTER', desc: '舰长姓名、年龄、性别、背景' },
   { key: 'prompt', icon: '📜', cn: '系统提示词', en: 'SYSTEM PROMPT', desc: '定义 AI 的世界观、风格和行为' },
-  { key: 'worldbook', icon: '📖', cn: '世界书', en: 'WORLD BOOK', desc: '关键词触发的世界背景知识库' },
-  { key: 'npc', icon: '👥', cn: 'NPC 角色书', en: 'NPC CARDS', desc: '管理世界的 NPC，按名字触发 AI 扮演' },
+  { key: 'worldbook', icon: '📖', cn: '全局世界书', en: 'GLOBAL WORLD BOOK', desc: '适用于所有世界的通用背景知识库' },
 ]
 
 function goBack() { page.value = null }
@@ -172,15 +170,6 @@ function goBack() { page.value = null }
       <div class="sub-body"><WorldBookManager /></div>
     </div>
 
-    <!-- ========== 子页面：NPC ========== -->
-    <div v-if="page === 'npc'" class="sub-page">
-      <header class="sub-header">
-        <button class="btn-back glass-panel" @click="goBack">← 返回</button>
-        <h2>👥 NPC 角色书 <span class="h-en">NPC CARDS</span></h2>
-        <span></span>
-      </header>
-      <div class="sub-body"><NpcManager /></div>
-    </div>
   </div>
 </template>
 

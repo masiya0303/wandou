@@ -15,7 +15,7 @@ async function handleCreate() {
   if (!name.value.trim()) { error.value = '请输入世界名称'; return }
   if (!description.value.trim()) { error.value = '请输入世界描述'; return }
   await store.createWorld(name.value.trim(), description.value.trim())
-  store.phase = 'setup'
+  store.phase = 'worldDetail'
 }
 
 function handleBack() { store.phase = 'worldList' }

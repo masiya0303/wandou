@@ -38,7 +38,7 @@ const DEFAULT_SYSTEM_PROMPT = `你是《豌豆星际漂流》的 AI 叙事引擎
 叙述用普通文字，NPC 对话用「」包裹，系统提示用【】包裹，重要选择用 >>> 开头。`
 
 // ---------- Phase 类型 ----------
-export type GamePhase = 'start' | 'worldList' | 'createWorld' | 'setup' | 'playing'
+export type GamePhase = 'start' | 'worldList' | 'createWorld' | 'worldDetail' | 'setup' | 'playing'
 
 export const useGameStore = defineStore('game', () => {
   // ---- 全局状态 ----
@@ -269,6 +269,12 @@ export const useGameStore = defineStore('game', () => {
     return id
   }
 
+  async function openWorldDetail(id: string): Promise<boolean> {
+    const ok = await _loadWorld(id)
+    if (ok) phase.value = 'worldDetail'
+    return ok
+  }
+
   async function enterWorld(id: string): Promise<boolean> {
     const ok = await _loadWorld(id)
     if (ok) {
@@ -465,6 +471,10 @@ ${worldDescription.value ? worldDescription.value.slice(0, 200) + '...' : ''}
     if (c.model !== undefined) c.model = c.model.trim()
     Object.assign(apiConfig.value, c)
   }
+  function updateWorldInfo(name: string, description: string) {
+    worldName.value = name
+    worldDescription.value = description
+  }
   function updateCharacter(c: Partial<CharacterInfo>) { Object.assign(character.value, c) }
   function updateSystemPrompt(p: string) { systemPrompt.value = p }
 
@@ -480,7 +490,7 @@ ${worldDescription.value ? worldDescription.value.slice(0, 200) + '...' : ''}
     globalEnabledEntries, worldEnabledEntries, enabledNpcs,
 
     initStore,
-    createWorld, enterWorld, deleteWorld,
+    createWorld, openWorldDetail, enterWorld, deleteWorld, updateWorldInfo,
     addNpcEntries, removeNpc, toggleNpc, importNpcsFromJson,
     addGlobalWorldBookEntries, removeGlobalWorldBookEntry, toggleGlobalWorldBookEntry, resetGlobalWorldBook,
     addWorldBookEntries, removeWorldBookEntry, toggleWorldBookEntry, resetWorldBook,

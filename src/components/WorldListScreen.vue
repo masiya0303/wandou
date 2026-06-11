@@ -8,7 +8,7 @@ const store = useGameStore()
 const emit = defineEmits<{ back: [] }>()
 
 async function handleEnter(id: string) {
-  await store.enterWorld(id)
+  await store.openWorldDetail(id)
 }
 
 async function handleDelete(id: string, name: string) {
