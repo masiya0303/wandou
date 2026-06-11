@@ -24,7 +24,7 @@ function handleSettings() { emit('openSettings') }
 </template>
 
 <style scoped>
-.ss { height: 100vh; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; background: url('/splash-bg.png') center/cover no-repeat; }
+.ss { height: 100vh; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; background: var(--theme-chat-bg, var(--theme-chat-bg)) center/cover no-repeat; }
 .bg-orbs { position: fixed; inset: 0; z-index: -3; pointer-events: none; }
 .orb { position: absolute; border-radius: 50%; filter: blur(80px); animation: orb-pulse 8s ease-in-out infinite; }
 .orb-cyan { width: 400px; height: 400px; top: 10%; right: 15%; background: rgba(255,128,168,0.06); }

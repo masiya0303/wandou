@@ -108,7 +108,7 @@ async function goBack(){saving.value=true;store.updateWorldInfo(editName.value.t
 </template>
 
 <style scoped>
-.screen { height: 100vh; position: relative; overflow-y: auto; overflow-x: hidden; background: url('/splash-bg.png') center/cover no-repeat; }
+.screen { height: 100vh; position: relative; overflow-y: auto; overflow-x: hidden; background: var(--theme-chat-bg) center/cover no-repeat; }
 .container { position: relative; z-index: 1; max-width: 640px; width: 100%; margin: 0 auto; padding: 16px 18px 32px; display: flex; flex-direction: column; gap: 10px; }
 .top { display: flex; align-items: center; justify-content: space-between; }
 .top h1 { font-size: 20px; color: #e0e8ff; margin: 0; }

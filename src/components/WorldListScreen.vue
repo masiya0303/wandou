@@ -32,7 +32,7 @@ function fmt(ts: number) { return new Date(ts).toLocaleDateString('zh-CN',{month
 </template>
 
 <style scoped>
-.screen { min-height: 100vh; position: relative; overflow: hidden; display: flex; flex-direction: column; background: url('/splash-bg.png') center/cover no-repeat; }
+.screen { min-height: 100vh; position: relative; overflow: hidden; display: flex; flex-direction: column; background: var(--theme-chat-bg) center/cover no-repeat; }
 .bg-orbs { position: fixed; inset: 0; z-index: -3; pointer-events: none; }
 .orb { position: absolute; border-radius: 50%; filter: blur(80px); animation: orb-pulse 8s ease-in-out infinite; }
 .orb-pink { width: 300px; height: 300px; top: 20%; right: 10%; background: rgba(255,128,168,0.04); }

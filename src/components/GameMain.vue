@@ -30,7 +30,7 @@ async function goHome() { await store.autoSave(); store.phase = 'start' }
 </template>
 
 <style scoped>
-.game { display: flex; flex-direction: column; height: 100vh; background: url('/splash-bg.png') center/cover no-repeat; position: relative; overflow: hidden; }
+.game { display: flex; flex-direction: column; height: 100vh; background: var(--theme-chat-bg) center/cover no-repeat; position: relative; overflow: hidden; }
 .bar { display: flex; align-items: center; justify-content: space-between; padding: 0 14px; height: 44px; flex-shrink: 0; z-index: 20; background: rgba(255,255,255,0.7); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-bottom: 1px solid var(--pink-ice); }
 .bar-left, .bar-right { display: flex; align-items: center; gap: 8px; }
 .bar-title { font-size: 15px; font-weight: 600; color: var(--pink-primary); }

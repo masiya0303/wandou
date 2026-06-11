@@ -51,6 +51,9 @@
 
   /* 渐变 */
   --gradient-accent: linear-gradient(90deg, transparent, var(--accent), transparent);
+  --theme-chat-bg: url('/splash-bg.png');
+  --theme-panel-bg: url('/splash-bg.png');
+  --theme-bubble-bg: none;
 
   /* === bjd粉色主题 === */
   --pink-primary: rgba(112, 88, 98, 0.81);
