@@ -1,4 +1,4 @@
-<!-- wandou · 聊天面板 — yijiekkk 风格 -->
+<!-- wandou · 聊天面板 — 白色磨砂气泡 -->
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
 import { useGameStore } from '../stores/gameStore'
@@ -111,35 +111,45 @@ function time(ts: number) { return new Date(ts).toLocaleTimeString('zh-CN', { ho
 
 /* ===== AI 消息 ===== */
 .ai-msg { margin-bottom: 22px; position: relative; padding-left: 16px; }
-.ai-msg::before { content: ''; position: absolute; left: 0; top: 4px; bottom: 4px; width: 3px; background: rgba(34,211,238,0.3); border-radius: 2px; }
-.ai-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.ai-msg::before { content: ''; position: absolute; left: 0; top: 4px; bottom: 4px; width: 3px; background: rgba(34,211,238,0.5); border-radius: 2px; }
+.ai-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
 .ai-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-cyan); }
 .ai-name { font-size: 12px; font-weight: 600; color: var(--accent-cyan); }
 .ai-time { font-size: 10px; color: var(--text-muted); }
-.ai-body { font-size: 15px; line-height: 1.8; color: var(--text-primary); }
+.ai-body {
+  font-size: 15px; line-height: 1.8; color: #2c3848;
+  background: rgba(255,255,255,0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 4px 12px 12px 12px;
+  padding: 14px 18px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.6);
+}
 
 /* ===== 用户消息 ===== */
 .user-msg { margin-bottom: 18px; display: flex; flex-direction: column; align-items: flex-end; }
-.user-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.user-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
 .user-time { font-size: 10px; color: var(--text-muted); }
 .user-name { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
 .user-body {
-  font-size: 14px; line-height: 1.6; color: var(--text-secondary);
-  max-width: 88%; padding: 10px 14px;
-  background: rgba(34,211,238,0.04);
-  border-right: 2px solid rgba(34,211,238,0.3);
-  border-radius: 6px 0 0 6px;
-  font-style: italic;
+  font-size: 14px; line-height: 1.6; color: #2c3848;
+  max-width: 85%;
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 12px 4px 12px 12px;
+  padding: 10px 16px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.6);
 }
 
-/* ===== Markdown ===== */
+/* ===== Markdown（白色气泡上） ===== */
 .ai-body :deep(p), .user-body :deep(p) { margin: 6px 0; }
-.ai-body :deep(strong), .user-body :deep(strong) { color: #e0c060; }
-.ai-body :deep(em), .user-body :deep(em) { color: #88c8e8; }
-.ai-body :deep(code), .user-body :deep(code) { background: rgba(0,0,0,0.35); padding: 1px 5px; border-radius: 3px; font-size: 0.88em; }
-.ai-body :deep(pre), .user-body :deep(pre) { background: rgba(0,0,0,0.4); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; overflow-x: auto; margin: 8px 0; }
-.ai-body :deep(pre code), .user-body :deep(pre code) { background: none; padding: 0; }
-.ai-body :deep(blockquote), .user-body :deep(blockquote) { border-left: 2px solid var(--accent-cyan); padding-left: 12px; margin: 6px 0; color: var(--text-secondary); }
+.ai-body :deep(strong), .user-body :deep(strong) { color: #b8860b; }
+.ai-body :deep(em), .user-body :deep(em) { color: #3a6b8c; }
+.ai-body :deep(code), .user-body :deep(code) { background: rgba(0,0,0,0.06); padding: 1px 5px; border-radius: 3px; font-size: 0.88em; color: #c7254e; }
+.ai-body :deep(pre), .user-body :deep(pre) { background: rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; padding: 10px 14px; overflow-x: auto; margin: 8px 0; }
+.ai-body :deep(pre code), .user-body :deep(pre code) { background: none; padding: 0; color: #2c3848; }
+.ai-body :deep(blockquote), .user-body :deep(blockquote) { border-left: 3px solid var(--accent-cyan); padding-left: 12px; margin: 6px 0; color: #4a6078; }
 
 /* ===== 加载 ===== */
 .loading { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 13px; padding: 16px; }
