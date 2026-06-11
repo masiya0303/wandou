@@ -16,8 +16,9 @@ async function handleDelete(id: string, name: string) {
   await store.deleteWorld(id)
 }
 
-function handleCreate() {
-  store.phase = 'createWorld'
+async function handleCreate() {
+  await store.createWorld('新世界', '')
+  store.phase = 'worldDetail'
 }
 
 function formatDate(ts: number): string {
