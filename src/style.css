@@ -1,89 +1,9 @@
 /* ============================================================
- wandou v1.2 — mimi vars + base + animations（内联）
+ wandou v1.2 — 全局样式
+ 色系: wandou 暗色科幻
+ 玻璃/圆角/动画: mimi
+ 字体: yijiekkk px
 ============================================================ */
-
-:root {
-  /* === mimi 品牌色 === */
-  --splash-gold: #ECD47D;
-  --splash-gold-glow: rgba(67, 28, 221, 0.45);
-  --border-gold: 1px solid rgba(212, 175, 55, 0.5);
-
-  /* === mimi 基础配色 === */
-  --color-primary: #a78bfa;
-  --color-bg: rgba(15, 15, 20, 0.95);
-  --color-bg-blur: rgba(255, 255, 255, 0.15);
-  --color-surface: rgba(255, 255, 255, 0.08);
-  --color-border: rgba(255, 255, 255, 0.2);
-  --color-text: #777777;
-  --color-text-dim: #777777;
-  --color-text-muted: #cccccc;
-  --color-backdrop: rgba(0, 0, 0, 0.62);
-
-  /* === mimi 玻璃 === */
-  --glass-backdrop: blur(12px);
-  --glass-shadow: 0 4px 10px rgba(0,0,0,0.1), inset 0 1px 1px rgba(255,255,255,0.3);
-  --glass-shadow-active: 0 2px 5px rgba(0,0,0,0.2), inset 0 1px 1px rgba(255,255,255,0.2);
-
-  /* === mimi 动画 === */
-  --duration-fast: 0.2s;
-  --duration-normal: 0.3s;
-  --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-opacity-fast: opacity var(--duration-fast) var(--ease-default);
-  --transition-fast: opacity var(--duration-fast) var(--ease-default), transform var(--duration-fast) var(--ease-default);
-  --transition-normal: opacity var(--duration-normal) var(--ease-default), transform var(--duration-normal) var(--ease-default);
-
-  /* === mimi 圆角 === */
-  --border-radius-sm: 12px;
-  --border-radius-main: 20px;
-  --border-radius-lg: 28px;
-  --border-radius-pill: 9999px;
-
-  /* === mimi 阴影 === */
-  --shadow-sm: 0 2px 8px rgba(0,0,0,0.15);
-  --shadow-md: 0 8px 25px rgba(0,0,0,0.25);
-
-  /* === yijiekkk 排版 (px) === */
-  --font-size-xs: 10px;
-  --font-size-sm: 13px;
-  --font-size-base: 15px;
-  --font-size-lg: 18px;
-  --font-size-xl: 24px;
-
-  /* === yijiekkk 间距 (px) === */
-  --space-xs: 6px;
-  --space-sm: 12px;
-  --space-md: 20px;
-  --space-lg: 32px;
-
-  /* === wandou 扩展 === */
-  --accent-cyan: #00e5ff;
-  --accent-cyan-glow: rgba(0, 229, 255, 0.4);
-  --danger: #c44;
-  --success: #40a060;
-  --gradient-accent: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
-  --gradient-cyan: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
-  --bg-primary: #0a0a1a;
-
-  /* mimi → wandou 别名（组件不用改） */
-  --font-xs: var(--font-size-xs);
-  --font-sm: var(--font-size-sm);
-  --font-base: var(--font-size-base);
-  --font-lg: var(--font-size-lg);
-  --font-xl: var(--font-size-xl);
-  --radius-sm: var(--border-radius-sm);
-  --radius-md: var(--border-radius-main);
-  --radius-lg: var(--border-radius-lg);
-  --radius-pill: var(--border-radius-pill);
-
-  font-family: 'Noto Sans SC', 'Roboto', system-ui, sans-serif;
-  font-size: var(--font-size-base);
-  line-height: 1.6;
-  color: var(--color-text);
-  background: var(--bg-primary);
-  -webkit-font-smoothing: antialiased;
-}
-
-/* === mimi base === */
 
 * {
   -webkit-tap-highlight-color: transparent;
@@ -93,15 +13,89 @@
   padding: 0;
 }
 
-html, body, #app {
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
+:root {
+  /* ===== 背景 ===== */
+  --bg-primary: #0a0a1a;
+  --bg-secondary: #0d1b2a;
+  --bg-tertiary: #111d2d;
+
+  /* ===== 边框 ===== */
+  --border: #1e3a5f;
+  --border-light: rgba(74, 144, 217, 0.25);
+
+  /* ===== 文字 — wandou 暗色科幻色 ===== */
+  --text-primary: #c8dcff;
+  --text-secondary: #8ba4c0;
+  --text-muted: #4a6380;
+
+  /* ===== 主色调 ===== */
+  --accent: #4a90d9;
+  --accent-glow: rgba(74, 144, 217, 0.3);
+  --accent-cyan: #00e5ff;
+  --accent-cyan-glow: rgba(0, 229, 255, 0.4);
+
+  /* ===== 紫色 ===== */
+  --color-primary: #a78bfa;
+
+  /* ===== 玻璃拟态 — mimi ===== */
+  --glass-bg: rgba(13, 27, 42, 0.55);
+  --glass-border: rgba(74, 144, 217, 0.22);
+  --glass-bg-hover: rgba(20, 42, 70, 0.7);
+  --color-surface: rgba(255, 255, 255, 0.06);
+  --color-border: rgba(255, 255, 255, 0.12);
+  --glass-backdrop: blur(12px);
+  --glass-shadow: 0 4px 10px rgba(0,0,0,0.1), inset 0 1px 1px rgba(255,255,255,0.3);
+  --glass-shadow-active: 0 2px 5px rgba(0,0,0,0.2), inset 0 1px 1px rgba(255,255,255,0.2);
+
+  /* ===== 动画 — mimi ===== */
+  --duration-fast: 0.2s;
+  --duration-normal: 0.3s;
+  --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-fast: opacity var(--duration-fast) var(--ease-default), transform var(--duration-fast) var(--ease-default);
+  --transition-normal: opacity var(--duration-normal) var(--ease-default), transform var(--duration-normal) var(--ease-default);
+
+  /* ===== 圆角 — mimi ===== */
+  --radius-sm: 12px;
+  --radius-md: 20px;
+  --radius-lg: 28px;
+  --radius-pill: 9999px;
+
+  /* ===== 阴影 — mimi ===== */
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.15);
+  --shadow-md: 0 8px 25px rgba(0,0,0,0.25);
+
+  /* ===== 功能色 ===== */
+  --danger: #c44;
+  --success: #40a060;
+  --warning: #d4a853;
+
+  /* ===== 渐变 ===== */
+  --gradient-accent: linear-gradient(90deg, transparent, var(--accent), transparent);
+  --gradient-cyan: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
+
+  /* ===== 字体 — yijiekkk px ===== */
+  --font-xs: 10px;
+  --font-sm: 13px;
+  --font-base: 16px;
+  --font-lg: 20px;
+  --font-xl: 26px;
+
+  /* ===== 间距 ===== */
+  --space-xs: 6px;
+  --space-sm: 12px;
+  --space-md: 20px;
+  --space-lg: 32px;
+
+  font-family: 'Noto Sans SC', 'Roboto', system-ui, sans-serif;
+  font-size: var(--font-base);
+  line-height: 1.6;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  -webkit-font-smoothing: antialiased;
 }
 
-#app {
-  background-image: none;
-  background: var(--bg-primary);
+html, body, #app {
+  width: 100%; height: 100%; overflow: hidden;
 }
 
 :focus-visible {
@@ -112,27 +106,22 @@ html, body, #app {
 /* === 滚动条 === */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
-::selection { background: rgba(167,139,250,0.3); color: #e0e8ff; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+::selection { background: rgba(74, 144, 217, 0.3); color: #e0e8ff; }
+a { color: var(--accent); text-decoration: none; }
 
-/* === mimi Vue 过渡 === */
-.fade-enter-active, .fade-leave-active { transition: var(--transition-opacity-fast); will-change: opacity; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
-.list-enter-active, .list-leave-active { transition: var(--transition-normal); will-change: transform, opacity; }
-.list-enter-from, .list-leave-to { opacity: 0; transform: translateY(0.5rem); }
-
-/* === wandou 工具类 === */
-
+/* === glass === */
 .glass-panel {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
   backdrop-filter: var(--glass-backdrop);
   -webkit-backdrop-filter: var(--glass-backdrop);
-  border-radius: var(--border-radius-sm);
+  border-radius: var(--radius-sm);
   transition: background var(--duration-normal), border-color var(--duration-normal), transform var(--duration-normal);
 }
 .glass-panel:active { transform: scale(0.98); }
 
+/* === corner deco === */
 .corner-deco { position: relative; }
 .corner-deco::before,
 .corner-deco::after {
@@ -142,6 +131,7 @@ html, body, #app {
 .corner-deco::before  { top: -1px; left: -1px;  border-top: 2px solid var(--accent-cyan); border-left: 2px solid var(--accent-cyan); }
 .corner-deco::after   { bottom: -1px; right: -1px; border-bottom: 2px solid var(--accent-cyan); border-right: 2px solid var(--accent-cyan); }
 
+/* === dividers === */
 .accent-divider {
   width: 60%; max-width: 300px; height: 1px;
   margin: 0.6rem auto; background: var(--gradient-accent); border: none;
@@ -158,6 +148,12 @@ html, body, #app {
   background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.03) 3px, rgba(0,0,0,0.03) 4px);
 }
 
+/* === Vue 过渡 === */
+.fade-enter-active, .fade-leave-active { transition: opacity var(--duration-fast) var(--ease-default); will-change: opacity; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+.list-enter-active, .list-leave-active { transition: var(--transition-normal); will-change: transform, opacity; }
+.list-enter-from, .list-leave-to { opacity: 0; transform: translateY(0.5rem); }
+
 /* === 关键帧 === */
 @keyframes twinkle { 0%,100%{opacity:.25} 50%{opacity:1} }
 @keyframes scan-line { 0%{transform:translateX(-100%)} 100%{transform:translateX(200%)} }
@@ -169,11 +165,11 @@ html, body, #app {
 @keyframes orbit-spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
 @keyframes signal-pulse { 0%,100%{box-shadow:0 0 4px rgba(0,229,255,.4)} 50%{box-shadow:0 0 10px rgba(0,229,255,.8),0 0 20px rgba(0,229,255,.3)} }
 
-/* === 响应式 — 手机 vw === */
+/* === 响应式 === */
 @media (max-width: 480px) {
   :root {
-    --font-size-xs: 3.2vw; --font-size-sm: 4vw; --font-size-base: 4.5vw;
-    --font-size-lg: 5.5vw; --font-size-xl: 7vw;
+    --font-xs: 3.2vw; --font-sm: 4vw; --font-base: 4.5vw;
+    --font-lg: 5.5vw; --font-xl: 7vw;
     --space-xs: 2vw; --space-sm: 4vw; --space-md: 6vw; --space-lg: 10vw;
   }
 }
