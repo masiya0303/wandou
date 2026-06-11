@@ -38,7 +38,7 @@ const DEFAULT_SYSTEM_PROMPT = `你是《豌豆星际漂流》的 AI 叙事引擎
 叙述用普通文字，NPC 对话用「」包裹，系统提示用【】包裹，重要选择用 >>> 开头。`
 
 // ---------- Phase 类型 ----------
-export type GamePhase = 'start' | 'worldList' | 'worldDetail' | 'setup' | 'playing'
+export type GamePhase = 'start' | 'worldList' | 'worldDetail' | 'playing'
 
 export const useGameStore = defineStore('game', () => {
   // ---- 全局状态 ----

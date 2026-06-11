@@ -1,6 +1,6 @@
 <!-- ============================================================
- wandou v0.7.5 — 根组件
- phase: start | worldList | worldDetail | setup | playing
+ wandou v0.9 — 根组件
+ phase: start | worldList | worldDetail | playing
 ============================================================ -->
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -8,7 +8,6 @@ import { useGameStore } from './stores/gameStore'
 import StartScreen from './components/StartScreen.vue'
 import WorldListScreen from './components/WorldListScreen.vue'
 import WorldDetailScreen from './components/WorldDetailScreen.vue'
-import SetupScreen from './components/SetupScreen.vue'
 import GameMain from './components/GameMain.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 
@@ -19,9 +18,8 @@ const showSettings = ref(false)
 <template>
   <div class="app-root">
     <StartScreen v-if="store.phase === 'start'" @open-settings="showSettings = true" />
-    <WorldListScreen v-else-if="store.phase === 'worldList'" @back="store.phase = 'start'" />
+    <WorldListScreen v-else-if="store.phase === 'worldList'" />
     <WorldDetailScreen v-else-if="store.phase === 'worldDetail'" />
-    <SetupScreen v-else-if="store.phase === 'setup'" />
     <GameMain v-else-if="store.phase === 'playing'" @open-settings="showSettings = true" />
     <SettingsPanel v-if="showSettings" @close="showSettings = false" />
   </div>
