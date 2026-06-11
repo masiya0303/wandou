@@ -43,16 +43,16 @@
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.15);
   --shadow-md: 0 8px 25px rgba(0, 0, 0, 0.25);
 
-  /* ================ 排版基础 ================ */
-  --font-size-xs: 3.2vw;
-  --font-size-sm: 4vw;
-  --font-size-base: 4.5vw;
-  --font-size-lg: 6vw;
-  --font-size-xl: 7.5vw;
+  /* ================ 排版基础 · yijiekkk 风格 (px) ================ */
+  --font-size-xs: 10px;
+  --font-size-sm: 13px;
+  --font-size-base: 15px;
+  --font-size-lg: 18px;
+  --font-size-xl: 24px;
 
-  /* ================ 间距系统 ================ */
-  --space-xs: 2vw;
-  --space-sm: 4vw;
-  --space-md: 6vw;
-  --space-lg: 10vw;
+  /* ================ 间距系统 · yijiekkk 风格 (px) ================ */
+  --space-xs: 6px;
+  --space-sm: 12px;
+  --space-md: 20px;
+  --space-lg: 32px;
 }

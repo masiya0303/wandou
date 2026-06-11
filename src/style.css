@@ -85,14 +85,11 @@
 @keyframes orbit-spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
 @keyframes signal-pulse { 0%,100%{box-shadow:0 0 4px rgba(0,229,255,.4)} 50%{box-shadow:0 0 10px rgba(0,229,255,.8),0 0 20px rgba(0,229,255,.3)} }
 
-/* ================ 响应式 ================ */
-@media (min-width: 768px) {
+/* ================ 响应式 — 手机微调 ================ */
+@media (max-width: 480px) {
   :root {
-    --font-size-xs: 13px; --font-size-sm: 15px; --font-size-base: 17px;
-    --font-size-lg: 22px; --font-size-xl: 28px;
-    --space-xs: 8px; --space-sm: 16px; --space-md: 24px; --space-lg: 40px;
+    --font-size-xs: 3.2vw; --font-size-sm: 4vw; --font-size-base: 4.5vw;
+    --font-size-lg: 5.5vw; --font-size-xl: 7vw;
+    --space-xs: 2vw; --space-sm: 4vw; --space-md: 6vw; --space-lg: 10vw;
   }
-}
-@media (max-width: 360px) {
-  :root { --font-size-base: 4.2vw; }
 }
