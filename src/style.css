@@ -1,118 +1,63 @@
 /* ============================================================
- wandou v1.2 — 全局样式 · 对齐 mimi 设计系统
- vw 排版 + 药丸圆角 + 玻璃拟态 + 紫色高亮
+ wandou v1.2 — 全局样式
+ core/ 直接从 mimi 引入
 ============================================================ */
+@import './assets/styles/core/vars.css' layer(tokens);
+@import './assets/styles/core/base.css' layer(base);
+@import './assets/styles/core/animations.css' layer(anim);
 
-*,
-*::before,
-*::after { box-sizing: border-box; margin: 0; padding: 0; }
-
+/* ================ wandou 扩展变量 ================ */
 :root {
-  /* 背景 */
-  --bg-primary: #0a0a1a;
-  --bg-secondary: #0d1b2a;
-  --bg-tertiary: #111d2d;
-
-  /* 边框 */
-  --border: #1e3a5f;
-  --border-light: rgba(74, 144, 217, 0.25);
-
-  /* 文字 */
-  --text-primary: #c8dcff;
-  --text-secondary: #8ba4c0;
-  --text-muted: #4a6380;
-
-  /* 主色 — 青蓝 */
-  --accent: #4a90d9;
-  --accent-glow: rgba(74, 144, 217, 0.3);
   --accent-cyan: #00e5ff;
   --accent-cyan-glow: rgba(0, 229, 255, 0.4);
-
-  /* 紫色（仿 mimi） */
-  --color-primary: #a78bfa;
-
-  /* 玻璃拟态 */
-  --glass-bg: rgba(15, 15, 20, 0.65);
-  --glass-border: rgba(255, 255, 255, 0.12);
-  --glass-bg-hover: rgba(20, 42, 70, 0.75);
-
-  /* 功能色 */
   --danger: #c44;
   --success: #40a060;
-  --warning: #d4a853;
-
-  /* 渐变 */
-  --gradient-accent: linear-gradient(90deg, transparent, var(--accent), transparent);
+  --gradient-accent: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
   --gradient-cyan: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
+  --bg-primary: #0a0a1a;
 
-  /* 圆角 — 仿 mimi 大圆角 */
-  --radius-pill: 9999px;
-  --radius-lg: 24px;
-  --radius-md: 16px;
-  --radius-sm: 10px;
-
-  /* 间距 */
-  --space-xs: 8px;
-  --space-sm: 16px;
-  --space-md: 24px;
-
-  /* 字号 — 移动端 vw / 桌面 px */
-  --font-xs: 13px;
-  --font-sm: 16px;
-  --font-base: 18px;
-  --font-lg: 24px;
-  --font-xl: 32px;
-
-  /* 阴影 — 仿 mimi */
-  --shadow-sm: 0 2px 8px rgba(0,0,0,0.15);
-  --shadow-md: 0 8px 25px rgba(0,0,0,0.25);
-
-  font-family: 'Noto Sans SC', 'Roboto', system-ui, -apple-system, sans-serif;
-  font-size: var(--font-base);
-  line-height: 1.6;
-  color: var(--text-primary);
-  background-color: var(--bg-primary);
-  -webkit-font-smoothing: antialiased;
+  /* mimi → wandou 别名（组件不用改） */
+  --font-xs: var(--font-size-xs);
+  --font-sm: var(--font-size-sm);
+  --font-base: var(--font-size-base);
+  --font-lg: var(--font-size-lg);
+  --font-xl: var(--font-size-xl);
+  --radius-sm: var(--border-radius-sm);
+  --radius-md: var(--border-radius-main);
+  --radius-lg: var(--border-radius-lg);
+  --radius-pill: var(--border-radius-pill);
 }
 
-html, body { width: 100%; height: 100%; overflow: hidden; }
+/* ================ 覆盖：wandou 不用背景图 ================ */
+#app { background-image: none; background: var(--bg-primary); }
 
-#app { width: 100%; height: 100%; }
-
-/* 滚动条 */
+/* ================ 滚动条 ================ */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
+::selection { background: rgba(167,139,250,0.3); color: #e0e8ff; }
 
-::selection { background: rgba(167, 139, 250, 0.3); color: #e0e8ff; }
-a { color: var(--accent); text-decoration: none; }
+/* ================ 工具类 ================ */
 
-/* ================================================================
-   工具类
-   ================================================================ */
-
-/* 玻璃拟态面板 — 仿 mimi glass */
 .glass-panel {
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  transition: background 0.3s, border-color 0.3s, transform 0.3s;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  backdrop-filter: var(--glass-backdrop);
+  -webkit-backdrop-filter: var(--glass-backdrop);
+  border-radius: var(--border-radius-sm);
+  transition: background var(--duration-normal), border-color var(--duration-normal), transform var(--duration-normal);
 }
 .glass-panel:active { transform: scale(0.98); }
 
-/* 四角角标 */
 .corner-deco { position: relative; }
 .corner-deco::before,
 .corner-deco::after {
   content: ''; position: absolute; width: 16px; height: 16px;
-  pointer-events: none; z-index: 2; opacity: 0.4;
-  transition: opacity 0.3s;
+  pointer-events: none; z-index: 2; opacity: 0.4; transition: opacity var(--duration-normal);
 }
 .corner-deco::before  { top: -1px; left: -1px;  border-top: 2px solid var(--accent-cyan); border-left: 2px solid var(--accent-cyan); }
 .corner-deco::after   { bottom: -1px; right: -1px; border-bottom: 2px solid var(--accent-cyan); border-right: 2px solid var(--accent-cyan); }
 
-/* 渐变分割线 */
 .accent-divider {
   width: 60%; max-width: 300px; height: 1px;
   margin: 0.6rem auto; background: var(--gradient-accent); border: none;
@@ -122,19 +67,14 @@ a { color: var(--accent); text-decoration: none; }
   margin: 0.4rem auto; background: var(--gradient-cyan); border: none;
 }
 
-/* 文字光晕 */
 .glow-text { text-shadow: 0 0 20px var(--accent-cyan-glow); }
 
-/* 双语标签 */
-.bilingual-label {
-  display: flex; flex-direction: column; align-items: center; gap: 0.05rem;
+.scanline-overlay {
+  position: fixed; inset: 0; pointer-events: none; z-index: 999;
+  background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.03) 3px, rgba(0,0,0,0.03) 4px);
 }
-.bilingual-label .label-cn { font-size: var(--font-base); font-weight: 600; color: var(--text-primary); }
-.bilingual-label .label-en { font-size: var(--font-xs); font-weight: 400; color: var(--text-muted); letter-spacing: 0.10em; text-transform: uppercase; }
 
-/* ================================================================
-   关键帧
-   ================================================================ */
+/* ================ 工具类扩展 ================ */
 @keyframes twinkle { 0%,100%{opacity:.25} 50%{opacity:1} }
 @keyframes scan-line { 0%{transform:translateX(-100%)} 100%{transform:translateX(200%)} }
 @keyframes glow-pulse { 0%,100%{text-shadow:0 0 20px rgba(100,180,255,.3)} 50%{text-shadow:0 0 40px rgba(100,180,255,.6),0 0 80px rgba(74,144,217,.3)} }
@@ -145,24 +85,14 @@ a { color: var(--accent); text-decoration: none; }
 @keyframes orbit-spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
 @keyframes signal-pulse { 0%,100%{box-shadow:0 0 4px rgba(0,229,255,.4)} 50%{box-shadow:0 0 10px rgba(0,229,255,.8),0 0 20px rgba(0,229,255,.3)} }
 
-/* ================================================================
-   扫描线覆盖（仿 mimi scanline-overlay 但更淡）
-   ================================================================ */
-.scanline-overlay {
-  position: fixed; inset: 0; pointer-events: none; z-index: 999;
-  background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.03) 3px, rgba(0,0,0,0.03) 4px);
-}
-
-/* ================================================================
-   响应式 — 手机用小字
-   ================================================================ */
-@media (max-width: 480px) {
+/* ================ 响应式 ================ */
+@media (min-width: 768px) {
   :root {
-    --font-xs: 3.2vw; --font-sm: 4vw; --font-base: 4.5vw;
-    --font-lg: 5.5vw; --font-xl: 7vw;
-    --space-xs: 2vw; --space-sm: 4vw; --space-md: 6vw;
+    --font-size-xs: 13px; --font-size-sm: 15px; --font-size-base: 17px;
+    --font-size-lg: 22px; --font-size-xl: 28px;
+    --space-xs: 8px; --space-sm: 16px; --space-md: 24px; --space-lg: 40px;
   }
 }
 @media (max-width: 360px) {
-  :root { --font-base: 4.2vw; }
+  :root { --font-size-base: 4.2vw; }
 }

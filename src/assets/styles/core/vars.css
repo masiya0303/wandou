@@ -1,0 +1,58 @@
+/* src/assets/styles/core/vars.css */
+
+:root {
+  /* ================ 品牌色系 ================ */
+  --splash-gold: #ECD47D;
+  --splash-gold-glow: rgba(67, 28, 221, 0.45);
+  --splash-bg-main: #0d160f;
+  --border-gold: 1px solid rgba(212, 175, 55, 0.5);
+  
+  /* ================ 基础配色 ================ */
+  --color-primary: #a78bfa;
+  --color-bg: rgba(15, 15, 20, 0.95);
+  --color-bg-blur: rgba(255, 255, 255, 0.15);
+  --color-surface: rgba(255, 255, 255, 0.08);
+  --color-border: rgba(255, 255, 255, 0.2);
+  --color-text: #777777;
+  --color-text-dim: #777777;
+  --color-text-muted: #cccccc;
+  --color-backdrop: rgba(0, 0, 0, 0.62);
+  /* ================ 玻璃态效果 ================ */
+  --glass-backdrop: blur(12px);
+  --glass-shadow: 0 4px 10px rgba(0, 0, 0, 0.1), inset 0 1px 1px rgba(255, 255, 255, 0.3);
+  --glass-shadow-active: 0 2px 5px rgba(0, 0, 0, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.2);
+
+  /* ================ 动画系统 (优化整合版) ================ */
+  --duration-fast: 0.2s;
+  --duration-normal: 0.3s;
+  --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+  
+  /* 组合令牌 - 针对性动画 */
+  --transition-opacity-fast: opacity var(--duration-fast) var(--ease-default);
+  /* 组合令牌 - 通用动画 */
+  --transition-fast: opacity var(--duration-fast) var(--ease-default), transform var(--duration-fast) var(--ease-default);
+  --transition-normal: opacity var(--duration-normal) var(--ease-default), transform var(--duration-normal) var(--ease-default);
+
+  /* ================ 圆角系统 ================ */
+  --border-radius-sm: 12px;
+  --border-radius-main: 20px;
+  --border-radius-lg: 28px;
+  --border-radius-pill: 9999px;
+
+  /* ================ 阴影与层级 ================ */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.15);
+  --shadow-md: 0 8px 25px rgba(0, 0, 0, 0.25);
+
+  /* ================ 排版基础 ================ */
+  --font-size-xs: 3.2vw;
+  --font-size-sm: 4vw;
+  --font-size-base: 4.5vw;
+  --font-size-lg: 6vw;
+  --font-size-xl: 7.5vw;
+
+  /* ================ 间距系统 ================ */
+  --space-xs: 2vw;
+  --space-sm: 4vw;
+  --space-md: 6vw;
+  --space-lg: 10vw;
+}
