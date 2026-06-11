@@ -27,5 +27,5 @@ onUnmounted(() => window.removeEventListener('wandou:esc', onEsc))
 </template>
 
 <style scoped>
-.app-root { width: 100%; min-height: 100vh; background: var(--bg-primary); color: var(--text-primary); }
+.app-root { width: 100%; min-height: 100vh; color: var(--text-primary); }
 </style>
