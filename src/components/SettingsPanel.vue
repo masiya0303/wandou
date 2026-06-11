@@ -96,7 +96,8 @@ function goBack() { page.value = null }
 </template>
 
 <style scoped>
-.ss { position: fixed; inset: 0; z-index: 100; background: rgba(5,8,15,0.88); display: flex; flex-direction: column; overflow: hidden; }
+.ss { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; overflow: hidden; background: url('/splash-bg.png') center/cover no-repeat; }
+.ss::after { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: -1; background: radial-gradient(ellipse at 50% 50%, rgba(8,14,24,0.65) 0%, rgba(8,14,24,0.3) 65%, transparent 100%); }
 .ss-bg { position: absolute; inset: 0; pointer-events: none;
   background: radial-gradient(1px 1px at 10% 15%, rgba(255,255,255,0.5), transparent),
               radial-gradient(1px 1px at 30% 50%, rgba(255,255,255,0.3), transparent),

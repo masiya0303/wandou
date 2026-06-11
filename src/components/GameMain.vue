@@ -13,6 +13,7 @@ async function goHome() { await store.autoSave(); store.phase = 'start' }
 
 <template>
   <div class="game">
+    <div class="bg-vignette"></div>
     <header class="bar">
       <span class="bar-left">
         <button class="bar-btn" @click="goHome" title="主菜单">🏠</button>

@@ -103,7 +103,7 @@ async function goBack() {
 
 <template>
   <div class="screen">
-    <div class="bg-base"></div>
+    <div class="bg-vignette"></div>
     <div class="container">
       <header class="top">
         <button class="btn-back glass-panel" @click="goBack" :disabled="saving">← 返回</button>
@@ -170,7 +170,7 @@ async function goBack() {
 
 <style scoped>
 .screen { height: 100vh; position: relative; overflow-y: auto; overflow-x: hidden; background: url('/splash-bg.png') center/cover no-repeat; }
-.bg-base { display: none; }
+
 .container { position: relative; z-index: 1; max-width: 640px; width: 100%; margin: 0 auto; padding: 1rem 1.2rem 2rem; display: flex; flex-direction: column; gap: 0.6rem; }
 
 .top { display: flex; align-items: center; justify-content: space-between; }
