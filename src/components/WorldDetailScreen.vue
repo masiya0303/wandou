@@ -5,6 +5,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useGameStore } from '../stores/gameStore'
+import type { WorldBookEntry } from '../types/worldBook'
 import { importWorldBook } from '../utils/worldBookEngine'
 import { importNpcJson } from '../utils/npcEngine'
 import { sound } from '../utils/sound'
@@ -58,6 +59,34 @@ function importWb() {
   if (r.success && r.entries.length > 0) store.addWorldBookEntries(r.entries)
   wbJson.value = ''; showWb.value = false
 }
+
+// ---- 世界书条目编辑 ----
+const editingWbId = ref<string | null>(null)
+const editWbComment = ref('')
+const editWbKeys = ref('')
+const editWbContent = ref('')
+
+function startEditWb(e: WorldBookEntry) {
+  editingWbId.value = e.id
+  editWbComment.value = e.comment || ''
+  editWbKeys.value = e.keys.join(', ')
+  editWbContent.value = e.content
+}
+
+function saveEditWb() {
+  const id = editingWbId.value; if (!id) return
+  const entry = store.worldBook.find(x => x.id === id)
+  if (!entry) return
+  entry.comment = editWbComment.value.trim()
+  entry.keys = editWbKeys.value.split(',').map(k => k.trim()).filter(Boolean)
+  entry.content = editWbContent.value.trim()
+  autoSaveAfterChange()
+  cancelEditWb()
+}
+
+function cancelEditWb() { editingWbId.value = null }
+
+function autoSaveAfterChange() { store.autoSave() }
 
 // ---- API ----
 const apiKey = ref(store.apiConfig.apiKey || '')
@@ -145,7 +174,29 @@ async function goBack() {
         <div v-if="showWb" class="imp"><textarea v-model="wbJson" class="ta" placeholder="粘贴世界书 JSON..." rows="2"></textarea><button class="act go" @click="importWb" :disabled="!wbJson.trim()">导入</button></div>
         <div v-if="store.worldBook.length === 0" class="empty">暂无世界书条目</div>
         <div v-for="e in store.worldBook" :key="e.id" :class="['entry', { off: !e.enabled }]">
-          <div class="er"><button class="tg" @click="store.toggleWorldBookEntry(e.id)">{{ e.enabled ? '✅' : '⛔' }}</button><div class="ei"><span class="enm">{{ e.comment || '未命名' }}</span></div><span class="pri">{{ e.position === 'at_constant' ? '📌' : '#'+e.priority }}</span><button class="edel" @click="store.removeWorldBookEntry(e.id)">🗑️</button></div>
+          <div class="er">
+            <button class="tg" @click="store.toggleWorldBookEntry(e.id)">{{ e.enabled ? '✅' : '⛔' }}</button>
+            <div class="ei" style="flex:1;min-width:0">
+              <span class="enm">{{ e.comment || '未命名' }}</span>
+              <span style="font-size:10px;color:var(--text-muted)">{{ e.keys.slice(0,3).join(' / ') }}{{ e.keys.length>3?'...':'' }}</span>
+            </div>
+            <span class="pri">{{ e.position === 'at_constant' ? '📌' : '#'+e.priority }}</span>
+            <button class="edl" @click="editingWbId === e.id ? cancelEditWb() : startEditWb(e)" :title="editingWbId === e.id ? '收起编辑' : '编辑'">
+              {{ editingWbId === e.id ? '✕' : '✏️' }}
+            </button>
+            <button class="edel" @click="store.removeWorldBookEntry(e.id)">🗑️</button>
+          </div>
+          <!-- inline 编辑区 -->
+          <div v-if="editingWbId === e.id" class="edit-row">
+            <input v-model="editWbComment" class="edit-fi" placeholder="条目名称" />
+            <input v-model="editWbKeys" class="edit-fi" placeholder="关键词，逗号分隔" />
+            <textarea v-model="editWbContent" class="edit-ta" rows="4" placeholder="内容..."></textarea>
+            <div class="edit-btns">
+              <button class="edit-save" @click="saveEditWb">💾 保存</button>
+              <span class="edit-hint">关键词逗号分隔</span>
+            </div>
+          </div>
+          <p v-else class="ep">{{ e.content.slice(0, 80) }}{{ e.content.length > 80 ? '...' : '' }}</p>
         </div>
       </div>
 
@@ -214,6 +265,21 @@ async function goBack() {
 .erl { font-size: 11px; color: var(--accent-cyan); }
 .pri { font-size: 11px; color: var(--text-muted); }
 .edel { background: none; border: none; cursor: pointer; font-size: 0.7rem; opacity: 0.3; padding: 0; }
+.edl { background: none; border: none; cursor: pointer; font-size: 0.7rem; opacity: 0.35; padding: 0; margin-right: 2px; }
+.edl:hover { opacity: 0.8; }
+
+/* 条目内编辑 */
+.edit-row { margin-top: 8px; padding-left: 24px; display: flex; flex-direction: column; gap: 6px; }
+.edit-fi { width: 100%; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; background: rgba(255,255,255,0.6); color: #1a2a3a; font-size: 12px; font-family: inherit; box-sizing: border-box; }
+.edit-fi:focus { outline: none; border-color: var(--accent-cyan); }
+.edit-ta { width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: rgba(255,255,255,0.6); color: #1a2a3a; font-size: 12px; font-family: monospace; resize: vertical; box-sizing: border-box; min-height: 60px; }
+.edit-ta:focus { outline: none; border-color: var(--accent-cyan); }
+.edit-btns { display: flex; align-items: center; gap: 8px; }
+.edit-save { padding: 4px 12px; border: none; border-radius: 6px; background: var(--accent-cyan); color: #fff; font-size: 12px; cursor: pointer; font-family: inherit; transition: all 0.2s; }
+.edit-save:active { transform: scale(0.96); }
+.edit-hint { font-size: 10px; color: var(--text-muted); }
+
+.ep { font-size: 11px; color: var(--text-muted); margin: 4px 0 0; padding-left: 24px; line-height: 1.4; }
 
 .err { color: #e55; font-size: 11px; text-align: center; margin: 0; }
 
