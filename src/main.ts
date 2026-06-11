@@ -21,15 +21,15 @@ async function bootstrap() {
   const store = useGameStore()
   await store.initStore()
 
-  // 退出前自动保存
+  // 退出前同步保存（async 在 beforeunload 里来不及）
   window.addEventListener('beforeunload', () => {
     if (store.phase === 'playing' && store.messages.length > 0) {
-      store.autoSave()
+      store.syncSave()
     }
   })
   window.addEventListener('pagehide', () => {
     if (store.phase === 'playing' && store.messages.length > 0) {
-      store.autoSave()
+      store.syncSave()
     }
   })
 }

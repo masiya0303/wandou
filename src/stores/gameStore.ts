@@ -11,8 +11,9 @@ import { chatStream } from '../utils/api'
 import { scanAndCollect, extractRecentText, importWorldBook, PRESET_WORLD_BOOK } from '../utils/worldBookEngine'
 import { db } from '../utils/db'
 
-const SAVE_ID = 'current'  // 单一存档槽
+const SAVE_ID = 'current'
 const SAVE_VERSION = '0.6'
+const LOCAL_KEY = 'wandou_save_v0.6'  // localStorage fallback key
 
 // ---------- 默认值 ----------
 
@@ -83,8 +84,9 @@ export const useGameStore = defineStore('game', () => {
   // ---------- 初始化：异步检查存档 ----------
   async function initStore() {
     try {
-      const raw = await db.getSave(SAVE_ID)
+      const raw = await _loadFromStorage()
       hasSave.value = !!raw
+      if (raw) console.log(`[Store] ✅ 发现存档: ${raw.messages?.length || 0} 条消息, 角色: ${raw.character?.name || '?'}`)
     } catch {
       hasSave.value = false
     } finally {
@@ -156,14 +158,63 @@ export const useGameStore = defineStore('game', () => {
     if (typeof save.worldBookEnabled === 'boolean') worldBookEnabled.value = save.worldBookEnabled
   }
 
-  // ---------- 自动存档（AI 回复后调用）----------
-  async function autoSave() {
+  // ---------- 存储引擎：IndexedDB 优先，失败回退 localStorage ----------
+  async function _saveToStorage(save: GameSave): Promise<boolean> {
+    try {
+      await db.putSave({ id: SAVE_ID, ...save })
+      return true
+    } catch (e) {
+      console.warn('[Store] IndexedDB 写入失败，回退 localStorage:', e)
+      try {
+        localStorage.setItem(LOCAL_KEY, JSON.stringify(save))
+        return true
+      } catch (e2) {
+        console.error('[Store] localStorage 也失败了:', e2)
+        return false
+      }
+    }
+  }
+
+  async function _loadFromStorage(): Promise<GameSave | null> {
+    try {
+      const raw = await db.getSave(SAVE_ID)
+      if (raw) return raw
+    } catch (e) {
+      console.warn('[Store] IndexedDB 读取失败，回退 localStorage:', e)
+    }
+    try {
+      const raw = localStorage.getItem(LOCAL_KEY)
+      if (raw) return JSON.parse(raw)
+    } catch { /* ignore */ }
+    return null
+  }
+
+  async function _deleteStorage(): Promise<void> {
+    try { await db.deleteSave(SAVE_ID) } catch { /* ignore */ }
+    try { localStorage.removeItem(LOCAL_KEY) } catch { /* ignore */ }
+  }
+
+  // beforeunload 时 async 来不及，同步写 localStorage
+  function syncSave() {
     try {
       const save = _buildSave()
-      await db.putSave({ id: SAVE_ID, ...save })
-      hasSave.value = true
+      localStorage.setItem(LOCAL_KEY, JSON.stringify(save))
+    } catch { /* ignore */ }
+  }
+
+  // ---------- 自动存档（AI 回复后调用）----------
+  async function autoSave() {
+    let msgCount = 0
+    try {
+      const save = _buildSave()
+      msgCount = save.messages.length
+      const ok = await _saveToStorage(save)
+      if (ok) {
+        hasSave.value = true
+        console.log(`[AutoSave] ✅ 已保存 ${msgCount} 条消息 (${new Date().toLocaleTimeString()})`)
+      }
     } catch (e) {
-      console.error('[AutoSave] 自动存档失败:', e)
+      console.error('[AutoSave] 保存失败:', e)
     }
   }
 
@@ -171,9 +222,9 @@ export const useGameStore = defineStore('game', () => {
   async function saveToLocal(): Promise<boolean> {
     try {
       const save = _buildSave()
-      await db.putSave({ id: SAVE_ID, ...save })
-      hasSave.value = true
-      return true
+      const ok = await _saveToStorage(save)
+      if (ok) console.log(`[ManualSave] ✅ 已保存 ${save.messages.length} 条消息`)
+      return ok
     } catch {
       return false
     }
@@ -181,9 +232,13 @@ export const useGameStore = defineStore('game', () => {
 
   async function loadFromLocal(): Promise<boolean> {
     try {
-      const raw = await db.getSave(SAVE_ID)
-      if (!raw) return false
+      const raw = await _loadFromStorage()
+      if (!raw) {
+        console.log('[Store] 未找到存档')
+        return false
+      }
       _restoreSave(raw)
+      console.log(`[Store] ✅ 读取存档成功，${raw.messages?.length || 0} 条消息`)
       return true
     } catch {
       return false
@@ -191,11 +246,10 @@ export const useGameStore = defineStore('game', () => {
   }
 
   async function deleteSave() {
-    try {
-      await db.deleteSave(SAVE_ID)
-    } catch { /* ignore */ }
+    await _deleteStorage()
     hasSave.value = false
     resetGame()
+    console.log('[Store] 存档已删除')
   }
 
   // ---------- 发送消息（流式）----------
@@ -323,7 +377,7 @@ export const useGameStore = defineStore('game', () => {
     initStore, sendMessage, regenerate, clearMessages,
     buildWorldBookContext,
     importWorldBookFromJson, addWorldBookEntries, removeWorldBookEntry, toggleWorldBookEntry, resetWorldBook,
-    saveToLocal, loadFromLocal, deleteSave, autoSave,
+    saveToLocal, loadFromLocal, deleteSave, autoSave, syncSave,
     resetGame, startNewGame, startPlaying,
     updateApiConfig, updateCharacter, updateSystemPrompt,
   }
