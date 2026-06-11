@@ -43,7 +43,7 @@ const emit = defineEmits<{ openSettings: [] }>()
           <span class="crew-en">CAPTAIN</span>
         </span>
         <button class="btn-icon glass-panel" title="设置 · SETTINGS" @click="emit('openSettings')">⚙️</button>
-        <button class="btn-icon glass-panel" title="返回主菜单 · HOME" @click="store.phase = 'start'; store.resetGame()">🏠</button>
+        <button class="btn-icon glass-panel" title="返回主菜单 · HOME" @click="store.phase = 'start'">🏠</button>
       </div>
     </header>
 

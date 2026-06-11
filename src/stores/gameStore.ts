@@ -1,19 +1,21 @@
 // ============================================================
-// wandou v0.6 — 豌豆星际漂流 · 游戏状态管理
-// 存储：IndexedDB + 自动存档
+// wandou v0.7 — 豌豆星际漂流 · 多世界 + NPC 系统
+// 存储：IndexedDB + localStorage 双保险
 // ============================================================
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { ApiConfig, GameMessage, CharacterInfo, GameSave, GamePhase, SettingsTab } from '../types/game'
-import type { WorldBookEntry, ImportResult } from '../types/worldBook'
+import type { ApiConfig, GameMessage, CharacterInfo } from '../types/game'
+import type { WorldBookEntry } from '../types/worldBook'
+import type { World, WorldMeta } from '../types/world'
+import type { NpcEntry } from '../types/npc'
 import { chatStream } from '../utils/api'
-import { scanAndCollect, extractRecentText, importWorldBook, PRESET_WORLD_BOOK } from '../utils/worldBookEngine'
+import { scanAndCollect, extractRecentText, PRESET_WORLD_BOOK } from '../utils/worldBookEngine'
+import { scanNpcs, importNpcJson } from '../utils/npcEngine'
 import { db } from '../utils/db'
 
-const SAVE_ID = 'current'
-const SAVE_VERSION = '0.6'
-const LOCAL_KEY = 'wandou_save_v0.6'  // localStorage fallback key
+const LOCAL_KEY_PREFIX = 'wandou_world_'
+const LOCAL_LIST_KEY = 'wandou_world_list'
 
 // ---------- 默认值 ----------
 
@@ -26,85 +28,273 @@ const DEFAULT_API: ApiConfig = {
 }
 
 const DEFAULT_CHARACTER: CharacterInfo = {
-  name: '',
-  age: 25,
-  gender: '',
-  background: '',
+  name: '', age: 25, gender: '', background: '',
 }
 
 const DEFAULT_SYSTEM_PROMPT = `你是《豌豆星际漂流》的 AI 叙事引擎。
+根据下方「当前世界」的设定，以生动、沉浸的文字叙述玩家的冒险故事。
+扮演出现的 NPC，描述场景、氛围、科技细节。
+在关键时刻给玩家选择分支。
+叙述用普通文字，NPC 对话用「」包裹，系统提示用【】包裹，重要选择用 >>> 开头。`
 
-## 世界观
-公元 2847 年，人类已遍布银河系。你是一艘星际飞船「豌豆号」上的舰载 AI「豆豆」。
-玩家是飞船的船长，正在广袤的宇宙中冒险。
-
-## 你的职责
-- 以生动、沉浸的文字叙述玩家在星际间的冒险故事
-- 扮演 NPC（船员、外星人、AI 等）与玩家互动
-- 描述场景、氛围、科技细节
-- 在关键时刻给玩家选择分支
-
-## 风格要求
-- 科幻风格，适度使用硬科幻术语
-- 紧凑有力的叙述，每次回复控制在 2-4 段
-- 遇到战斗/危机时采用紧张刺激的描写
-- 保持故事连贯性，记住之前的剧情发展
-- 偶尔加入幽默元素，缓解紧张气氛
-
-## 格式
-- 叙述用普通文字
-- NPC 对话用「」包裹
-- 系统提示用【】包裹
-- 重要选择用 >>> 开头`
+// ---------- Phase 类型 ----------
+export type GamePhase = 'start' | 'worldList' | 'createWorld' | 'setup' | 'playing'
 
 export const useGameStore = defineStore('game', () => {
-  // ---------- 状态 ----------
-  const storeReady = ref(false)   // IndexedDB 初始化完成
+  // ---- 全局状态 ----
+  const storeReady = ref(false)
   const phase = ref<GamePhase>('start')
   const apiConfig = ref<ApiConfig>({ ...DEFAULT_API })
-  const character = ref<CharacterInfo>({ ...DEFAULT_CHARACTER })
   const systemPrompt = ref(DEFAULT_SYSTEM_PROMPT)
-  const messages = ref<GameMessage[]>([])
-  const isGenerating = ref(false)
-  const settingsTab = ref<SettingsTab>('api')
-  const error = ref('')
-  const hasSave = ref(false)    // 是否有存档（异步初始化）
 
-  // --- 世界书 ---
+  // ---- 世界列表 ----
+  const worldList = ref<WorldMeta[]>([])
+  const currentWorldId = ref<string | null>(null)
+
+  // ---- 当前世界状态 (lazy load) ----
+  const worldName = ref('')
+  const worldDescription = ref('')
+  const character = ref<CharacterInfo>({ ...DEFAULT_CHARACTER })
+  const messages = ref<GameMessage[]>([])
+  const npcs = ref<NpcEntry[]>([])
   const worldBook = ref<WorldBookEntry[]>(structuredClone(PRESET_WORLD_BOOK))
   const worldBookEnabled = ref(true)
 
-  // ---------- 计算属性 ----------
+  // ---- 运行时 ----
+  const isGenerating = ref(false)
+  const error = ref('')
+
+  // ---- 计算 ----
   const isApiReady = computed(() => !!apiConfig.value.apiKey && !!apiConfig.value.baseUrl)
   const isCharacterReady = computed(() => !!character.value.name.trim())
   const canStart = computed(() => isApiReady.value && isCharacterReady.value)
   const messageCount = computed(() => messages.value.length)
   const enabledEntries = computed(() => worldBook.value.filter(e => e.enabled).length)
+  const enabledNpcs = computed(() => npcs.value.filter(n => n.enabled).length)
 
-  // ---------- 初始化：异步检查存档 ----------
+  // ============ 初始化 ============
+
   async function initStore() {
+    // 迁移旧存档
+    await _migrateOldSave()
+    // 加载世界列表
+    worldList.value = await _loadWorldList()
+    storeReady.value = true
+    console.log(`[Store] 已加载 ${worldList.value.length} 个世界`)
+  }
+
+  async function _migrateOldSave() {
     try {
-      const raw = await _loadFromStorage()
-      hasSave.value = !!raw
-      if (raw) console.log(`[Store] ✅ 发现存档: ${raw.messages?.length || 0} 条消息, 角色: ${raw.character?.name || '?'}`)
-    } catch {
-      hasSave.value = false
-    } finally {
-      storeReady.value = true
+      // 尝试旧 saves store
+      const oldSave = await db.getWorld('current')
+      if (oldSave && oldSave.world && !oldSave.version) return
+    } catch { /* no old save */ }
+    try {
+      const old = localStorage.getItem('wandou_save_v0.6')
+      if (!old) return
+      const save = JSON.parse(old)
+      if (!save.messages?.length) return
+      // 迁移为世界
+      const world: World = {
+        id: 'migrated-' + Date.now(),
+        name: save.character?.name ? `${save.character.name}的冒险` : '旧存档',
+        description: '从旧版本迁移的存档',
+        createdAt: save.timestamp || Date.now(),
+        updatedAt: Date.now(),
+        character: save.character || { ...DEFAULT_CHARACTER },
+        npcs: [],
+        messages: save.messages || [],
+        worldBook: save.worldBook || [],
+        worldBookEnabled: save.worldBookEnabled !== false,
+      }
+      await db.putWorld({ id: world.id, world, apiConfig: save.apiConfig || DEFAULT_API })
+      localStorage.removeItem('wandou_save_v0.6')
+      console.log('[Store] 旧存档已迁移为世界:', world.name)
+    } catch { /* ignore */ }
+  }
+
+  // ============ 世界列表持久化 ============
+
+  async function _loadWorldList(): Promise<WorldMeta[]> {
+    try {
+      const list = await db.getGlobal('worldList')
+      if (list) return list
+    } catch {}
+    try {
+      const raw = localStorage.getItem(LOCAL_LIST_KEY)
+      if (raw) return JSON.parse(raw)
+    } catch {}
+    return []
+  }
+
+  async function _saveWorldList() {
+    try { await db.putGlobal('worldList', worldList.value) } catch {}
+    try { localStorage.setItem(LOCAL_LIST_KEY, JSON.stringify(worldList.value)) } catch {}
+  }
+
+  // ============ 世界持久化 ============
+
+  async function _saveWorld(): Promise<boolean> {
+    if (!currentWorldId.value) return false
+    const world: World = {
+      id: currentWorldId.value,
+      name: worldName.value,
+      description: worldDescription.value,
+      createdAt: 0, // will be preserved from existing
+      updatedAt: Date.now(),
+      character: { ...character.value },
+      npcs: [...npcs.value],
+      messages: [...messages.value],
+      worldBook: [...worldBook.value],
+      worldBookEnabled: worldBookEnabled.value,
+    }
+    try {
+      // 保留 createdAt
+      const existing = await db.getWorld(currentWorldId.value)
+      if (existing?.world?.createdAt) world.createdAt = existing.world.createdAt
+      await db.putWorld({ id: world.id, world, apiConfig: { ...apiConfig.value } })
+      // 更新世界列表元数据
+      const idx = worldList.value.findIndex(w => w.id === world.id)
+      const meta: WorldMeta = {
+        id: world.id, name: world.name, description: world.description,
+        characterName: world.character.name,
+        messageCount: world.messages.length,
+        createdAt: world.createdAt || Date.now(),
+        updatedAt: world.updatedAt,
+      }
+      if (idx >= 0) worldList.value[idx] = meta
+      else worldList.value.unshift(meta)
+      await _saveWorldList()
+
+      // localStorage fallback
+      try {
+        localStorage.setItem(LOCAL_KEY_PREFIX + world.id, JSON.stringify({ world, apiConfig: apiConfig.value }))
+      } catch {}
+      return true
+    } catch (e) {
+      console.warn('[Store] 世界保存失败:', e)
+      try {
+        localStorage.setItem(LOCAL_KEY_PREFIX + world.id, JSON.stringify({ world, apiConfig: apiConfig.value }))
+        const idx = worldList.value.findIndex(w => w.id === world.id)
+        const meta: WorldMeta = {
+          id: world.id, name: world.name, description: world.description,
+          characterName: world.character.name,
+          messageCount: world.messages.length,
+          createdAt: world.createdAt || Date.now(),
+          updatedAt: world.updatedAt,
+        }
+        if (idx >= 0) worldList.value[idx] = meta
+        else worldList.value.unshift(meta)
+        await _saveWorldList()
+        return true
+      } catch { return false }
     }
   }
 
-  // ---------- 世界书 Prompt 注入 ----------
-  function buildWorldBookContext(): string {
-    if (!worldBookEnabled.value) return ''
-    const texts = extractRecentText(messages.value, 10)
-    return scanAndCollect(worldBook.value, texts, 2000)
+  async function _loadWorld(id: string): Promise<boolean> {
+    try {
+      let data = await db.getWorld(id)
+      if (!data) {
+        const raw = localStorage.getItem(LOCAL_KEY_PREFIX + id)
+        if (raw) data = JSON.parse(raw)
+      }
+      if (!data?.world) return false
+      const w = data.world as World
+      currentWorldId.value = w.id
+      worldName.value = w.name
+      worldDescription.value = w.description
+      character.value = w.character
+      npcs.value = w.npcs || []
+      messages.value = w.messages || []
+      worldBook.value = w.worldBook?.length ? w.worldBook : structuredClone(PRESET_WORLD_BOOK)
+      worldBookEnabled.value = w.worldBookEnabled !== false
+      if (data.apiConfig?.apiKey) apiConfig.value = data.apiConfig
+      return true
+    } catch { return false }
   }
 
-  // ---------- 世界书管理 ----------
-  function importWorldBookFromJson(jsonStr: string): ImportResult & { entries: WorldBookEntry[] } {
-    return importWorldBook(jsonStr)
+  // ============ 世界 CRUD ============
+
+  async function createWorld(name: string, description: string): Promise<string> {
+    const id = 'world-' + Date.now()
+    currentWorldId.value = id
+    worldName.value = name
+    worldDescription.value = description
+    character.value = { ...DEFAULT_CHARACTER }
+    npcs.value = []
+    messages.value = []
+    worldBook.value = structuredClone(PRESET_WORLD_BOOK)
+    worldBookEnabled.value = true
+    error.value = ''
+
+    // 先加到列表
+    const meta: WorldMeta = {
+      id, name, description,
+      characterName: '',
+      messageCount: 0,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }
+    worldList.value.unshift(meta)
+    await _saveWorldList()
+    await _saveWorld()
+    return id
   }
+
+  async function enterWorld(id: string): Promise<boolean> {
+    const ok = await _loadWorld(id)
+    if (ok) {
+      phase.value = 'playing'
+      console.log(`[Store] 进入世界: ${worldName.value}`)
+    }
+    return ok
+  }
+
+  async function deleteWorld(id: string) {
+    try { await db.deleteWorld(id) } catch {}
+    try { localStorage.removeItem(LOCAL_KEY_PREFIX + id) } catch {}
+    worldList.value = worldList.value.filter(w => w.id !== id)
+    await _saveWorldList()
+    if (currentWorldId.value === id) {
+      currentWorldId.value = null
+      _resetCurrent()
+    }
+  }
+
+  function _resetCurrent() {
+    worldName.value = ''
+    worldDescription.value = ''
+    character.value = { ...DEFAULT_CHARACTER }
+    npcs.value = []
+    messages.value = []
+    worldBook.value = structuredClone(PRESET_WORLD_BOOK)
+    error.value = ''
+    isGenerating.value = false
+  }
+
+  // ============ NPC 管理 ============
+
+  function addNpcEntries(entries: NpcEntry[]) {
+    const existingIds = new Set(npcs.value.map(n => n.id))
+    for (const e of entries) {
+      if (!existingIds.has(e.id)) npcs.value.push(e)
+    }
+  }
+
+  function removeNpc(id: string) {
+    npcs.value = npcs.value.filter(n => n.id !== id)
+  }
+
+  function toggleNpc(id: string) {
+    const n = npcs.value.find(x => x.id === id)
+    if (n) n.enabled = !n.enabled
+  }
+
+  function importNpcsFromJson(jsonStr: string) {
+    return importNpcJson(jsonStr)
+  }
+
+  // ============ 世界书管理 ============
 
   function addWorldBookEntries(entries: WorldBookEntry[]) {
     const existingIds = new Set(worldBook.value.map(e => e.id))
@@ -112,273 +302,139 @@ export const useGameStore = defineStore('game', () => {
       if (!existingIds.has(entry.id)) worldBook.value.push(entry)
     }
   }
-
-  function removeWorldBookEntry(id: string) {
-    worldBook.value = worldBook.value.filter(e => e.id !== id)
-  }
-
+  function removeWorldBookEntry(id: string) { worldBook.value = worldBook.value.filter(e => e.id !== id) }
   function toggleWorldBookEntry(id: string) {
     const entry = worldBook.value.find(e => e.id === id)
     if (entry) entry.enabled = !entry.enabled
   }
+  function resetWorldBook() { worldBook.value = structuredClone(PRESET_WORLD_BOOK) }
 
-  function resetWorldBook() {
-    worldBook.value = structuredClone(PRESET_WORLD_BOOK)
-  }
+  // ============ Prompt 注入（三层）============
 
-  // ---------- 消息操作 ----------
-  function addMessage(msg: GameMessage) {
-    messages.value.push(msg)
-  }
+  function buildFullSystemPrompt(): string {
+    const parts: string[] = []
 
-  function clearMessages() {
-    messages.value = []
-  }
-
-  // ---------- 构建存档数据 ----------
-  function _buildSave(): GameSave {
-    return {
-      version: SAVE_VERSION,
-      timestamp: Date.now(),
-      character: { ...character.value },
-      messages: [...messages.value],
-      systemPrompt: systemPrompt.value,
-      apiConfig: { ...apiConfig.value },
-      worldBook: [...worldBook.value],
-      worldBookEnabled: worldBookEnabled.value,
+    // 第一层：世界描述
+    if (worldDescription.value.trim()) {
+      parts.push(`## 当前世界：${worldName.value || '未知世界'}\n${worldDescription.value.trim()}`)
     }
-  }
 
-  function _restoreSave(save: GameSave) {
-    character.value = save.character
-    messages.value = save.messages
-    systemPrompt.value = save.systemPrompt
-    apiConfig.value = save.apiConfig
-    if (save.worldBook) worldBook.value = save.worldBook
-    if (typeof save.worldBookEnabled === 'boolean') worldBookEnabled.value = save.worldBookEnabled
-  }
-
-  // ---------- 存储引擎：IndexedDB 优先，失败回退 localStorage ----------
-  async function _saveToStorage(save: GameSave): Promise<boolean> {
-    try {
-      await db.putSave({ id: SAVE_ID, ...save })
-      return true
-    } catch (e) {
-      console.warn('[Store] IndexedDB 写入失败，回退 localStorage:', e)
-      try {
-        localStorage.setItem(LOCAL_KEY, JSON.stringify(save))
-        return true
-      } catch (e2) {
-        console.error('[Store] localStorage 也失败了:', e2)
-        return false
-      }
+    // 第二层：世界书
+    if (worldBookEnabled.value) {
+      const texts = extractRecentText(messages.value, 10)
+      const ctx = scanAndCollect(worldBook.value, texts, 2000)
+      if (ctx) parts.push(ctx)
     }
+
+    // 第三层：场景 NPC
+    const texts = extractRecentText(messages.value, 10)
+    const npcCtx = scanNpcs(npcs.value, texts, 1500)
+    if (npcCtx) parts.push(npcCtx)
+
+    const context = parts.join('\n')
+    return context ? systemPrompt.value + '\n\n' + context : systemPrompt.value
   }
 
-  async function _loadFromStorage(): Promise<GameSave | null> {
-    try {
-      const raw = await db.getSave(SAVE_ID)
-      if (raw) return raw
-    } catch (e) {
-      console.warn('[Store] IndexedDB 读取失败，回退 localStorage:', e)
-    }
-    try {
-      const raw = localStorage.getItem(LOCAL_KEY)
-      if (raw) return JSON.parse(raw)
-    } catch { /* ignore */ }
-    return null
-  }
+  // ============ 消息操作 ============
+  function addMessage(msg: GameMessage) { messages.value.push(msg) }
+  function clearMessages() { messages.value = [] }
 
-  async function _deleteStorage(): Promise<void> {
-    try { await db.deleteSave(SAVE_ID) } catch { /* ignore */ }
-    try { localStorage.removeItem(LOCAL_KEY) } catch { /* ignore */ }
-  }
-
-  // beforeunload 时 async 来不及，同步写 localStorage
-  function syncSave() {
-    try {
-      const save = _buildSave()
-      localStorage.setItem(LOCAL_KEY, JSON.stringify(save))
-    } catch { /* ignore */ }
-  }
-
-  // ---------- 自动存档（AI 回复后调用）----------
-  async function autoSave() {
-    let msgCount = 0
-    try {
-      const save = _buildSave()
-      msgCount = save.messages.length
-      const ok = await _saveToStorage(save)
-      if (ok) {
-        hasSave.value = true
-        console.log(`[AutoSave] ✅ 已保存 ${msgCount} 条消息 (${new Date().toLocaleTimeString()})`)
-      }
-    } catch (e) {
-      console.error('[AutoSave] 保存失败:', e)
-    }
-  }
-
-  // ---------- 手动存档 ----------
-  async function saveToLocal(): Promise<boolean> {
-    try {
-      const save = _buildSave()
-      const ok = await _saveToStorage(save)
-      if (ok) console.log(`[ManualSave] ✅ 已保存 ${save.messages.length} 条消息`)
-      return ok
-    } catch {
-      return false
-    }
-  }
-
-  async function loadFromLocal(): Promise<boolean> {
-    try {
-      const raw = await _loadFromStorage()
-      if (!raw) {
-        console.log('[Store] 未找到存档')
-        return false
-      }
-      _restoreSave(raw)
-      console.log(`[Store] ✅ 读取存档成功，${raw.messages?.length || 0} 条消息`)
-      return true
-    } catch {
-      return false
-    }
-  }
-
-  async function deleteSave() {
-    await _deleteStorage()
-    hasSave.value = false
-    resetGame()
-    console.log('[Store] 存档已删除')
-  }
-
-  // ---------- 发送消息（流式）----------
+  // ============ 发送消息 ============
   async function sendMessage(userInput: string) {
     if (isGenerating.value || !userInput.trim()) return
-
     error.value = ''
 
-    const userMsg: GameMessage = {
-      id: `user-${Date.now()}`,
-      role: 'user',
-      content: userInput.trim(),
-      timestamp: Date.now(),
-    }
+    const userMsg: GameMessage = { id: `user-${Date.now()}`, role: 'user', content: userInput.trim(), timestamp: Date.now() }
     addMessage(userMsg)
 
-    const aiMsg: GameMessage = {
-      id: `assistant-${Date.now()}`,
-      role: 'assistant',
-      content: '',
-      timestamp: Date.now(),
-    }
+    const aiMsg: GameMessage = { id: `assistant-${Date.now()}`, role: 'assistant', content: '', timestamp: Date.now() }
     addMessage(aiMsg)
 
     isGenerating.value = true
-
     try {
-      const wbContext = buildWorldBookContext()
-      const effectiveSystemPrompt = wbContext
-        ? systemPrompt.value + wbContext
-        : systemPrompt.value
-
-      const fullContent = await chatStream(
-        apiConfig.value,
-        effectiveSystemPrompt,
-        messages.value.slice(0, -1),
-        (chunk) => { aiMsg.content += chunk },
-      )
+      const fullPrompt = buildFullSystemPrompt()
+      const fullContent = await chatStream(apiConfig.value, fullPrompt, messages.value.slice(0, -1), (chunk) => { aiMsg.content += chunk })
       aiMsg.content = fullContent
-
-      // ✅ 每次 AI 回复成功后自动存档
       autoSave()
     } catch (e: any) {
-      error.value = e.message || '请求失败，请检查 API 配置'
+      error.value = e.message || '请求失败'
       messages.value = messages.value.filter(m => m.id !== aiMsg.id)
     } finally {
       isGenerating.value = false
     }
   }
 
-  // ---------- 重新生成 ----------
   async function regenerate() {
     if (isGenerating.value) return
-
     const lastMsg = messages.value[messages.value.length - 1]
     if (lastMsg?.role === 'assistant') messages.value.pop()
-
-    const lastUserMsg = messages.value[messages.value.length - 1]
-    if (lastUserMsg?.role === 'user') {
-      const userContent = lastUserMsg.content
+    const lastUser = messages.value[messages.value.length - 1]
+    if (lastUser?.role === 'user') {
+      const content = lastUser.content
       messages.value.pop()
-      await sendMessage(userContent)
+      await sendMessage(content)
     }
   }
 
-  // ---------- 重置 ----------
-  function resetGame() {
-    messages.value = []
-    character.value = { ...DEFAULT_CHARACTER }
-    systemPrompt.value = DEFAULT_SYSTEM_PROMPT
-    worldBook.value = structuredClone(PRESET_WORLD_BOOK)
-    worldBookEnabled.value = true
-    error.value = ''
-    isGenerating.value = false
+  // ============ 存档 ============
+  async function autoSave() {
+    const ok = await _saveWorld()
+    if (ok) console.log(`[AutoSave] ✅ "${worldName.value}" ${messages.value.length} 条消息`)
   }
 
-  function startNewGame() {
-    resetGame()
-    phase.value = 'setup'
+  function syncSave() {
+    if (!currentWorldId.value) return
+    try {
+      const data = {
+        world: {
+          id: currentWorldId.value, name: worldName.value, description: worldDescription.value,
+          createdAt: 0, updatedAt: Date.now(),
+          character: character.value, npcs: npcs.value, messages: messages.value,
+          worldBook: worldBook.value, worldBookEnabled: worldBookEnabled.value,
+        },
+        apiConfig: apiConfig.value,
+      }
+      localStorage.setItem(LOCAL_KEY_PREFIX + currentWorldId.value, JSON.stringify(data))
+    } catch {}
   }
 
+  // ============ 开始游戏 ============
   function startPlaying() {
-    if (!canStart.value) return
+    if (!isApiReady.value || !character.value.name.trim()) return
     phase.value = 'playing'
-    const welcomeMsg: GameMessage = {
-      id: `system-${Date.now()}`,
-      role: 'assistant',
-      content: `【「豌豆号」舰载 AI 豆豆已启动】
+    const welcome: GameMessage = {
+      id: `system-${Date.now()}`, role: 'assistant',
+      content: `【世界「${worldName.value}」加载完成】
 
-舰长${character.value.name || '阁下'}，欢迎回到舰桥。星图已更新，曲速引擎预热完毕。
+${worldDescription.value ? worldDescription.value.slice(0, 200) + '...' : ''}
 
-当前坐标：开普勒-186f 星系外围 · 第三悬臂
-
-请下达指令，舰长。`,
+舰长${character.value.name || '阁下'}，冒险开始了。请下达指令。`,
       timestamp: Date.now(),
     }
-    addMessage(welcomeMsg)
-    // 新游戏首次存档
+    addMessage(welcome)
     autoSave()
   }
 
-  // ---------- 设置 ----------
-  function updateApiConfig(config: Partial<ApiConfig>) {
-    Object.assign(apiConfig.value, config)
-  }
+  // ============ 设置 ============
+  function updateApiConfig(c: Partial<ApiConfig>) { Object.assign(apiConfig.value, c) }
+  function updateCharacter(c: Partial<CharacterInfo>) { Object.assign(character.value, c) }
+  function updateSystemPrompt(p: string) { systemPrompt.value = p }
 
-  function updateCharacter(info: Partial<CharacterInfo>) {
-    Object.assign(character.value, info)
-  }
-
-  function updateSystemPrompt(prompt: string) {
-    systemPrompt.value = prompt
-  }
-
+  // ----导出----
   return {
-    // state
-    storeReady, phase, apiConfig, character, systemPrompt, messages,
-    isGenerating, settingsTab, error, hasSave,
-    worldBook, worldBookEnabled,
+    storeReady, phase, apiConfig, systemPrompt,
+    worldList, currentWorldId,
+    worldName, worldDescription, character, messages, npcs, worldBook, worldBookEnabled,
+    isGenerating, error,
 
-    // computed
-    isApiReady, isCharacterReady, canStart, messageCount, enabledEntries,
+    isApiReady, isCharacterReady, canStart, messageCount, enabledEntries, enabledNpcs,
 
-    // actions
-    initStore, sendMessage, regenerate, clearMessages,
-    buildWorldBookContext,
-    importWorldBookFromJson, addWorldBookEntries, removeWorldBookEntry, toggleWorldBookEntry, resetWorldBook,
-    saveToLocal, loadFromLocal, deleteSave, autoSave, syncSave,
-    resetGame, startNewGame, startPlaying,
+    initStore,
+    createWorld, enterWorld, deleteWorld,
+    addNpcEntries, removeNpc, toggleNpc, importNpcsFromJson,
+    addWorldBookEntries, removeWorldBookEntry, toggleWorldBookEntry, resetWorldBook,
+    sendMessage, regenerate, clearMessages, autoSave, syncSave,
+    startPlaying,
     updateApiConfig, updateCharacter, updateSystemPrompt,
   }
 })

@@ -51,7 +51,7 @@ function handleBack() {
     gender: gender.value,
     background: background.value.trim(),
   })
-  store.phase = 'start'
+  store.phase = 'worldList'
 }
 </script>
 

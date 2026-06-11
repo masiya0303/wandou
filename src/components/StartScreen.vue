@@ -3,23 +3,13 @@
  纯主菜单：开始游戏 / 继续游戏 / 设置面板
 ============================================================ -->
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useGameStore } from '../stores/gameStore'
 
 const store = useGameStore()
 const emit = defineEmits<{ openSettings: [] }>()
 
-const hasSave = computed(() => store.hasSave)
-const ready = computed(() => store.storeReady)
-
-function handleNewGame() {
-  store.resetGame()
-  store.phase = 'setup'
-}
-
-async function handleContinue() {
-  const ok = await store.loadFromLocal()
-  if (ok) store.phase = 'playing'
+function handleWorlds() {
+  store.phase = 'worldList'
 }
 </script>
 
@@ -68,27 +58,15 @@ async function handleContinue() {
 
       <!-- 菜单按钮 -->
       <div class="menu-buttons">
-        <!-- 开始游戏 -->
-        <button class="menu-btn glass-panel corner-deco" @click="handleNewGame">
-          <span class="btn-icon">🚀</span>
+        <button class="menu-btn glass-panel corner-deco" @click="handleWorlds">
+          <span class="btn-icon">🌍</span>
           <div class="btn-labels">
-            <span class="btn-cn">开始游戏</span>
-            <span class="btn-en">NEW GAME</span>
+            <span class="btn-cn">我的世界</span>
+            <span class="btn-en">MY WORLDS</span>
           </div>
           <span class="btn-arrow">→</span>
         </button>
 
-        <!-- 继续游戏 -->
-        <button class="menu-btn glass-panel corner-deco" :class="{ disabled: !hasSave }" :disabled="!hasSave" @click="handleContinue">
-          <span class="btn-icon">{{ ready ? '💾' : '⏳' }}</span>
-          <div class="btn-labels">
-            <span class="btn-cn">{{ ready ? (hasSave ? '继续游戏' : '暂无存档') : '检查存档中...' }}</span>
-            <span class="btn-en">{{ ready ? (hasSave ? 'CONTINUE' : 'NO SAVE') : 'CHECKING' }}</span>
-          </div>
-          <span class="btn-arrow">{{ ready ? (hasSave ? '→' : '') : '' }}</span>
-        </button>
-
-        <!-- 设置面板 -->
         <button class="menu-btn glass-panel corner-deco" @click="emit('openSettings')">
           <span class="btn-icon">⚙️</span>
           <div class="btn-labels">

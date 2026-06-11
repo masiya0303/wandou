@@ -1,13 +1,13 @@
 // ============================================================
-// wandou v0.6 — 豌豆星际漂流 · IndexedDB 存储
-// 仿 yijiekkk 的 IndexedDB 封装模式
+// wandou v0.7 — 豌豆星际漂流 · IndexedDB 存储 v2
+// stores: worlds (多世界) + global (key-value)
 // ============================================================
 
 const DB_NAME = 'WandouDB'
-const DB_VERSION = 1
+const DB_VERSION = 2
 
 const STORES = {
-  SAVES: 'saves',   // keyPath: 'id'
+  WORLDS: 'worlds', // keyPath: 'id' — 每个 World 一条
   GLOBAL: 'global', // keyPath: 'key'
 } as const
 
@@ -26,8 +26,9 @@ function openDB(): Promise<IDBDatabase> {
 
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBRequest).result as IDBDatabase
-      if (!db.objectStoreNames.contains(STORES.SAVES)) {
-        db.createObjectStore(STORES.SAVES, { keyPath: 'id' })
+      // v1 → v2: 如果旧 saves store 存在，保留不删; 新加 worlds
+      if (!db.objectStoreNames.contains(STORES.WORLDS)) {
+        db.createObjectStore(STORES.WORLDS, { keyPath: 'id' })
       }
       if (!db.objectStoreNames.contains(STORES.GLOBAL)) {
         db.createObjectStore(STORES.GLOBAL, { keyPath: 'key' })
@@ -36,49 +37,47 @@ function openDB(): Promise<IDBDatabase> {
   })
 }
 
-// ---- 类型安全封装 ----
-
 export const db = {
-  // ============ Save ============
+  // ============ Worlds ============
 
-  async getSave(id: string): Promise<any | undefined> {
+  async getWorld(id: string): Promise<any | undefined> {
     const database = await openDB()
     return new Promise((resolve, reject) => {
-      const tx = database.transaction([STORES.SAVES], 'readonly')
-      const store = tx.objectStore(STORES.SAVES)
+      const tx = database.transaction([STORES.WORLDS], 'readonly')
+      const store = tx.objectStore(STORES.WORLDS)
       const req = store.get(id)
       req.onsuccess = () => resolve(req.result)
       req.onerror = () => reject(req.error)
     })
   },
 
-  async getAllSaves(): Promise<any[]> {
+  async getAllWorlds(): Promise<any[]> {
     const database = await openDB()
     return new Promise((resolve, reject) => {
-      const tx = database.transaction([STORES.SAVES], 'readonly')
-      const store = tx.objectStore(STORES.SAVES)
+      const tx = database.transaction([STORES.WORLDS], 'readonly')
+      const store = tx.objectStore(STORES.WORLDS)
       const req = store.getAll()
       req.onsuccess = () => resolve(req.result)
       req.onerror = () => reject(req.error)
     })
   },
 
-  async putSave(saveData: any): Promise<IDBValidKey> {
+  async putWorld(worldData: any): Promise<IDBValidKey> {
     const database = await openDB()
     return new Promise((resolve, reject) => {
-      const tx = database.transaction([STORES.SAVES], 'readwrite')
-      const store = tx.objectStore(STORES.SAVES)
-      const req = store.put(saveData)
+      const tx = database.transaction([STORES.WORLDS], 'readwrite')
+      const store = tx.objectStore(STORES.WORLDS)
+      const req = store.put(worldData)
       req.onsuccess = () => resolve(req.result)
       req.onerror = () => reject(req.error)
     })
   },
 
-  async deleteSave(id: string): Promise<void> {
+  async deleteWorld(id: string): Promise<void> {
     const database = await openDB()
     return new Promise((resolve, reject) => {
-      const tx = database.transaction([STORES.SAVES], 'readwrite')
-      const store = tx.objectStore(STORES.SAVES)
+      const tx = database.transaction([STORES.WORLDS], 'readwrite')
+      const store = tx.objectStore(STORES.WORLDS)
       const req = store.delete(id)
       req.onsuccess = () => resolve()
       req.onerror = () => reject(req.error)
@@ -105,17 +104,6 @@ export const db = {
       const store = tx.objectStore(STORES.GLOBAL)
       const req = store.put({ key, value })
       req.onsuccess = () => resolve(req.result)
-      req.onerror = () => reject(req.error)
-    })
-  },
-
-  async deleteGlobal(key: string): Promise<void> {
-    const database = await openDB()
-    return new Promise((resolve, reject) => {
-      const tx = database.transaction([STORES.GLOBAL], 'readwrite')
-      const store = tx.objectStore(STORES.GLOBAL)
-      const req = store.delete(key)
-      req.onsuccess = () => resolve()
       req.onerror = () => reject(req.error)
     })
   },
