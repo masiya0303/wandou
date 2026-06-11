@@ -3,11 +3,12 @@
  四角角标 + 玻璃拟态 + 双语标签 + 卡片 Hover
 ============================================================ -->
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useGameStore } from '../stores/gameStore'
 import WorldBookManager from './WorldBookManager.vue'
 
 const store = useGameStore()
+const hasActiveGame = computed(() => store.messages.length > 0)
 const emit = defineEmits<{ close: [] }>()
 const tab = ref<string>('api')
 const saved = ref(false)
@@ -102,7 +103,7 @@ const TABS: { key: string; cn: string; en: string; icon: string }[] = [
       <!-- 底部 -->
       <div class="modal-footer">
         <span v-if="saved" class="save-feedback">✅ 已保存</span>
-        <button class="btn-save-game glass-panel" @click="handleSaveGame">💾 手动存档</button>
+        <button v-if="hasActiveGame" class="btn-save-game glass-panel" @click="handleSaveGame">💾 手动存档</button>
         <button class="btn-save" @click="handleSave">保存设置</button>
       </div>
     </div>

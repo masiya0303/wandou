@@ -3,14 +3,12 @@
  顶栏角标 + 双语标签 + 信号指示器 + 粒子背景
 ============================================================ -->
 <script setup lang="ts">
-import { ref } from 'vue'
 import { useGameStore } from '../stores/gameStore'
 import ChatPanel from './ChatPanel.vue'
 import InputBar from './InputBar.vue'
-import SettingsPanel from './SettingsPanel.vue'
 
 const store = useGameStore()
-const showSettings = ref(false)
+const emit = defineEmits<{ openSettings: [] }>()
 </script>
 
 <template>
@@ -44,7 +42,7 @@ const showSettings = ref(false)
           <span class="crew-cn">👨‍🚀 {{ store.character.name || '舰长' }}</span>
           <span class="crew-en">CAPTAIN</span>
         </span>
-        <button class="btn-icon glass-panel" title="设置 · SETTINGS" @click="showSettings = true">⚙️</button>
+        <button class="btn-icon glass-panel" title="设置 · SETTINGS" @click="emit('openSettings')">⚙️</button>
         <button class="btn-icon glass-panel" title="返回主菜单 · HOME" @click="store.phase = 'start'; store.resetGame()">🏠</button>
       </div>
     </header>
@@ -55,8 +53,6 @@ const showSettings = ref(false)
     <!-- 输入区域 -->
     <InputBar />
 
-    <!-- 设置面板 -->
-    <SettingsPanel v-if="showSettings" @close="showSettings = false" />
   </div>
 </template>
 
