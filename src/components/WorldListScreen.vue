@@ -63,9 +63,7 @@ function fmt(ts: number) { return new Date(ts).toLocaleDateString('zh-CN', { mon
 
 <style scoped>
 .screen { min-height: 100vh; position: relative; overflow: hidden; display: flex; flex-direction: column; }
-.bg-base { position: fixed; inset: 0; z-index: -4;
-  background: radial-gradient(ellipse at 30% 20%, rgba(10,40,80,0.3) 0%, transparent 60%),
-              linear-gradient(180deg, #0a0a1a 0%, #0d1b2a 40%, #111d2d 100%); }
+.bg-base { position: fixed; inset: 0; z-index: -4; background: rgba(8,14,24,0.5); }
 .bg-orbs { position: fixed; inset: 0; z-index: -3; pointer-events: none; }
 .orb { position: absolute; border-radius: 50%; filter: blur(80px); animation: orb-pulse 8s ease-in-out infinite; }
 .orb-cyan { width: 300px; height: 300px; top: 20%; right: 10%; background: rgba(0,229,255,0.06); }

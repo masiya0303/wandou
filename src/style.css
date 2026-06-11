@@ -6,10 +6,10 @@
 
 :root {
   /* 背景 */
-  --bg-primary: #080e18;
+  --bg-primary: #3A516B;
 
   /* 边框 */
-  --border: #1c3350;
+  --border: #113159;
 
   /* 文字 */
   --text-primary: #e0e8ff;
@@ -63,6 +63,13 @@
 }
 
 html, body, #app { width: 100%; height: 100%; overflow: hidden; }
+
+html {
+  background-image: url('/splash-bg.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
 :focus-visible { outline: 2px solid var(--accent-cyan); outline-offset: 2px; }
 
 /* 滚动条 */

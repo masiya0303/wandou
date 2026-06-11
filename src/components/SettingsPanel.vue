@@ -96,7 +96,7 @@ function goBack() { page.value = null }
 </template>
 
 <style scoped>
-.ss { position: fixed; inset: 0; z-index: 100; background: rgba(5,8,15,0.95); display: flex; flex-direction: column; overflow: hidden; }
+.ss { position: fixed; inset: 0; z-index: 100; background: rgba(5,8,15,0.88); display: flex; flex-direction: column; overflow: hidden; }
 .ss-bg { position: absolute; inset: 0; pointer-events: none;
   background: radial-gradient(1px 1px at 10% 15%, rgba(255,255,255,0.5), transparent),
               radial-gradient(1px 1px at 30% 50%, rgba(255,255,255,0.3), transparent),
