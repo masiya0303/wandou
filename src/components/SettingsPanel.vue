@@ -67,7 +67,7 @@ function goBack() { page.value = null }
         <button class="ss-close" @click="emit('close')">✕</button>
       </header>
       <div class="card-grid">
-        <button v-for="c in CARDS" :key="c.key" class="s-card glass-panel corner-deco" @click="page = c.key">
+        <button v-for="c in CARDS" :key="c.key" class="s-card glass-panel" @click="page = c.key">
           <span class="s-icon">{{ c.icon }}</span>
           <div class="s-labels"><span class="s-cn">{{ c.cn }}</span><span class="s-en">{{ c.en }}</span></div>
           <p class="s-desc">{{ c.key === 'theme' ? themeDesc() : c.desc }}</p>
@@ -91,7 +91,7 @@ function goBack() { page.value = null }
       <div class="sub-body">
 
         <!-- API -->
-        <div v-if="page === 'api'" class="form-card glass-panel corner-deco">
+        <div v-if="page === 'api'" class="form-card glass-panel">
           <div class="fg"><label>API Key <span class="l-en">AUTH</span></label><input v-model="editApiKey" type="password" class="fi" placeholder="sk-..." /></div>
           <div class="fg"><label>API 地址 <span class="l-en">ENDPOINT</span></label><input v-model="editBaseUrl" type="text" class="fi" /></div>
           <div class="fg"><label>模型 <span class="l-en">MODEL</span></label><input v-model="editModel" type="text" class="fi" /></div>
@@ -103,19 +103,19 @@ function goBack() { page.value = null }
         </div>
 
         <!-- Prompt -->
-        <div v-if="page === 'prompt'" class="form-card glass-panel corner-deco">
+        <div v-if="page === 'prompt'" class="form-card glass-panel">
           <p style="font-size:12px;color:var(--pink-primary);margin:0 0 12px">提示词决定 AI 的世界观、风格和行为。</p>
           <div class="fg"><textarea v-model="editSystemPrompt" class="fi fi-ta" rows="22" style="font-family:monospace;font-size:12px"></textarea></div>
           <button class="sub-save" @click="handleSave">保存</button>
         </div>
 
         <!-- WorldBook -->
-        <div v-if="page === 'worldbook'" class="form-card glass-panel corner-deco">
+        <div v-if="page === 'worldbook'" class="form-card glass-panel">
           <WorldBookManager />
         </div>
 
         <!-- Theme -->
-        <div v-if="page === 'theme'" class="form-card glass-panel corner-deco">
+        <div v-if="page === 'theme'" class="form-card glass-panel">
           <p style="font-size:13px;color:var(--pink-primary);margin:0 0 16px">点击预设主题，或粘贴 ST 主题 JSON 导入自定义主题。</p>
 
           <div style="display:flex;gap:10px;margin-bottom:16px">
