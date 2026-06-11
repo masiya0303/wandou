@@ -18,7 +18,7 @@ const showSettings = ref(false)
 <template>
   <div class="app-root">
     <StartScreen v-if="store.phase === 'start'" @open-settings="showSettings = true" />
-    <WorldListScreen v-else-if="store.phase === 'worldList'" />
+    <WorldListScreen v-else-if="store.phase === 'worldList'" @back="store.phase = 'start'" />
     <WorldDetailScreen v-else-if="store.phase === 'worldDetail'" />
     <GameMain v-else-if="store.phase === 'playing'" @open-settings="showSettings = true" />
     <SettingsPanel v-if="showSettings" @close="showSettings = false" />
