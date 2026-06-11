@@ -1,19 +1,14 @@
 /* ============================================================
- wandou v0.3 — 豌豆星际漂流 · 全局样式
+ wandou v1.2 — 全局样式 · 对齐 mimi 设计系统
+ vw 排版 + 药丸圆角 + 玻璃拟态 + 紫色高亮
 ============================================================ */
 
-/* ---------- Reset ---------- */
 *,
 *::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+*::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* ---------- 基础 ---------- */
 :root {
-  /* 背景色系 */
+  /* 背景 */
   --bg-primary: #0a0a1a;
   --bg-secondary: #0d1b2a;
   --bg-tertiary: #111d2d;
@@ -27,20 +22,19 @@
   --text-secondary: #8ba4c0;
   --text-muted: #4a6380;
 
-  /* 主色调 — 蓝 */
+  /* 主色 — 青蓝 */
   --accent: #4a90d9;
   --accent-glow: rgba(74, 144, 217, 0.3);
-  --accent-glow-strong: rgba(74, 144, 217, 0.5);
-
-  /* 青蓝高亮 — 模仿 yijiekkk 的金色角色 */
   --accent-cyan: #00e5ff;
   --accent-cyan-glow: rgba(0, 229, 255, 0.4);
-  --accent-cyan-strong: rgba(0, 229, 255, 0.6);
+
+  /* 紫色（仿 mimi） */
+  --color-primary: #a78bfa;
 
   /* 玻璃拟态 */
-  --glass-bg: rgba(13, 27, 42, 0.55);
-  --glass-border: rgba(74, 144, 217, 0.22);
-  --glass-bg-hover: rgba(20, 42, 70, 0.7);
+  --glass-bg: rgba(15, 15, 20, 0.65);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-bg-hover: rgba(20, 42, 70, 0.75);
 
   /* 功能色 */
   --danger: #c44;
@@ -51,241 +45,124 @@
   --gradient-accent: linear-gradient(90deg, transparent, var(--accent), transparent);
   --gradient-cyan: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
 
+  /* 圆角 — 仿 mimi 大圆角 */
+  --radius-pill: 9999px;
+  --radius-lg: 24px;
+  --radius-md: 16px;
+  --radius-sm: 10px;
+
+  /* 间距 — vw 单位（移动端优先） */
+  --space-xs: 2vw;
+  --space-sm: 4vw;
+  --space-md: 6vw;
+
+  /* 字号 — vw 单位 */
+  --font-xs: 3.2vw;
+  --font-sm: 4vw;
+  --font-base: 4.5vw;
+  --font-lg: 5.5vw;
+  --font-xl: 7vw;
+
+  /* 阴影 — 仿 mimi */
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.15);
+  --shadow-md: 0 8px 25px rgba(0,0,0,0.25);
+
   font-family: 'Noto Sans SC', 'Roboto', system-ui, -apple-system, sans-serif;
-  font-size: 16px;
+  font-size: var(--font-base);
   line-height: 1.6;
   color: var(--text-primary);
   background-color: var(--bg-primary);
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
-html, body {
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-}
+html, body { width: 100%; height: 100%; overflow: hidden; }
 
-#app {
-  width: 100%;
-  height: 100%;
-}
+#app { width: 100%; height: 100%; }
 
-/* ---------- 滚动条 ---------- */
-::-webkit-scrollbar {
-  width: 5px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #1e3a5f;
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #2a5080;
-}
+/* 滚动条 */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-/* ---------- 选中颜色 ---------- */
-::selection {
-  background: rgba(74, 144, 217, 0.3);
-  color: #e0e8ff;
-}
-
-/* ---------- 链接 ---------- */
-a {
-  color: var(--accent);
-  text-decoration: none;
-}
-a:hover {
-  text-decoration: underline;
-}
+::selection { background: rgba(167, 139, 250, 0.3); color: #e0e8ff; }
+a { color: var(--accent); text-decoration: none; }
 
 /* ================================================================
-   工具类 — 模仿 yijiekkk 的视觉模式，适配科幻主题
+   工具类
    ================================================================ */
 
-/* 玻璃拟态面板 */
+/* 玻璃拟态面板 — 仿 mimi glass */
 .glass-panel {
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
-  border-radius: 12px;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  transition: background 0.3s, border-color 0.3s, transform 0.3s, box-shadow 0.3s;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: background 0.3s, border-color 0.3s, transform 0.3s;
 }
-.glass-panel:hover {
-  background: var(--glass-bg-hover);
-  border-color: rgba(74, 144, 217, 0.4);
-}
+.glass-panel:active { transform: scale(0.98); }
 
-/* 四角科技角标 */
-.corner-deco {
-  position: relative;
-}
+/* 四角角标 */
+.corner-deco { position: relative; }
 .corner-deco::before,
 .corner-deco::after {
-  content: '';
-  position: absolute;
-  width: 18px; height: 18px;
-  pointer-events: none;
-  z-index: 2;
-  opacity: 0.5;
-  transition: opacity 0.3s, border-color 0.3s;
+  content: ''; position: absolute; width: 16px; height: 16px;
+  pointer-events: none; z-index: 2; opacity: 0.4;
+  transition: opacity 0.3s;
 }
-.corner-deco::before  { top: -1px; left: -1px;   border-top: 2px solid var(--accent-cyan); border-left: 2px solid var(--accent-cyan); }
+.corner-deco::before  { top: -1px; left: -1px;  border-top: 2px solid var(--accent-cyan); border-left: 2px solid var(--accent-cyan); }
 .corner-deco::after   { bottom: -1px; right: -1px; border-bottom: 2px solid var(--accent-cyan); border-right: 2px solid var(--accent-cyan); }
-.corner-deco:hover::before,
-.corner-deco:hover::after {
-  opacity: 0.9;
-  border-color: var(--accent-cyan);
-}
-
-/* 四角角标（完整版 — 四个角的 L 形 bracket） */
-.corner-deco-full {
-  position: relative;
-}
-.corner-deco-full::before,
-.corner-deco-full::after,
-.corner-deco-full > .corner-tl,
-.corner-deco-full > .corner-br {
-  content: '';
-  position: absolute;
-  width: 22px; height: 22px;
-  pointer-events: none;
-  z-index: 2;
-  opacity: 0.45;
-}
-.corner-deco-full::before  { top: 0; left: 0;    border-top: 2px solid var(--accent-cyan); border-left: 2px solid var(--accent-cyan); }
-.corner-deco-full::after   { bottom: 0; right: 0; border-bottom: 2px solid var(--accent-cyan); border-right: 2px solid var(--accent-cyan); }
 
 /* 渐变分割线 */
 .accent-divider {
-  width: 60%;
-  max-width: 300px;
-  height: 1px;
-  margin: 0.6rem auto;
-  background: var(--gradient-accent);
-  border: none;
+  width: 60%; max-width: 300px; height: 1px;
+  margin: 0.6rem auto; background: var(--gradient-accent); border: none;
 }
-
-/* 青蓝渐变分割线 */
 .cyan-divider {
-  width: 50%;
-  max-width: 240px;
-  height: 1px;
-  margin: 0.5rem auto;
-  background: var(--gradient-cyan);
-  border: none;
+  width: 45%; max-width: 200px; height: 1px;
+  margin: 0.4rem auto; background: var(--gradient-cyan); border: none;
 }
 
 /* 文字光晕 */
-.glow-text {
-  text-shadow: 0 0 20px var(--accent-cyan-glow), 0 0 40px rgba(0, 229, 255, 0.15);
-}
+.glow-text { text-shadow: 0 0 20px var(--accent-cyan-glow); }
 
 /* 双语标签 */
 .bilingual-label {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.1rem;
+  display: flex; flex-direction: column; align-items: center; gap: 0.05rem;
 }
-.bilingual-label .label-cn {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-.bilingual-label .label-en {
-  font-size: 0.6rem;
-  font-weight: 400;
-  color: var(--text-muted);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+.bilingual-label .label-cn { font-size: var(--font-base); font-weight: 600; color: var(--text-primary); }
+.bilingual-label .label-en { font-size: var(--font-xs); font-weight: 400; color: var(--text-muted); letter-spacing: 0.10em; text-transform: uppercase; }
+
+/* ================================================================
+   关键帧
+   ================================================================ */
+@keyframes twinkle { 0%,100%{opacity:.25} 50%{opacity:1} }
+@keyframes scan-line { 0%{transform:translateX(-100%)} 100%{transform:translateX(200%)} }
+@keyframes glow-pulse { 0%,100%{text-shadow:0 0 20px rgba(100,180,255,.3)} 50%{text-shadow:0 0 40px rgba(100,180,255,.6),0 0 80px rgba(74,144,217,.3)} }
+@keyframes orb-pulse { 0%,100%{opacity:.25;transform:scale(1)} 50%{opacity:.5;transform:scale(1.15)} }
+@keyframes float-particle { 0%{transform:translateY(0) translateX(0);opacity:0} 10%{opacity:.6} 90%{opacity:.4} 100%{transform:translateY(-100vh) translateX(60px);opacity:0} }
+@keyframes float-down { 0%{transform:translateY(-20px);opacity:0} 20%{opacity:.7} 80%{opacity:.5} 100%{transform:translateY(100vh);opacity:0} }
+@keyframes slide-up { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+@keyframes orbit-spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+@keyframes signal-pulse { 0%,100%{box-shadow:0 0 4px rgba(0,229,255,.4)} 50%{box-shadow:0 0 10px rgba(0,229,255,.8),0 0 20px rgba(0,229,255,.3)} }
+
+/* ================================================================
+   扫描线覆盖（仿 mimi scanline-overlay 但更淡）
+   ================================================================ */
+.scanline-overlay {
+  position: fixed; inset: 0; pointer-events: none; z-index: 999;
+  background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.03) 3px, rgba(0,0,0,0.03) 4px);
 }
 
 /* ================================================================
-   关键帧动画
+   响应式
    ================================================================ */
-
-/* 星星闪烁 */
-@keyframes twinkle {
-  0%, 100% { opacity: 0.25; }
-  50% { opacity: 1; }
+@media (min-width: 768px) {
+  :root {
+    --font-xs: 14px; --font-sm: 16px; --font-base: 18px;
+    --font-lg: 24px; --font-xl: 32px;
+    --space-xs: 8px; --space-sm: 16px; --space-md: 24px;
+  }
 }
-
-/* 扫描线 */
-@keyframes scan-line {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(200%); }
-}
-
-/* 标题光晕脉动 */
-@keyframes glow-pulse {
-  0%, 100% { text-shadow: 0 0 20px rgba(100, 180, 255, 0.3); }
-  50% { text-shadow: 0 0 40px rgba(100, 180, 255, 0.6), 0 0 80px rgba(74, 144, 217, 0.3); }
-}
-
-/* 霓虹脉动 */
-@keyframes neon-pulse {
-  0%, 100% { opacity: 0.4; transform: scale(1); }
-  50% { opacity: 0.7; transform: scale(1.05); }
-}
-
-/* 光球脉动 */
-@keyframes orb-pulse {
-  0%, 100% { opacity: 0.25; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(1.15); }
-}
-
-/* 浮游粒子 */
-@keyframes float-particle {
-  0%   { transform: translateY(0) translateX(0); opacity: 0; }
-  10%  { opacity: 0.6; }
-  90%  { opacity: 0.4; }
-  100% { transform: translateY(-100vh) translateX(60px); opacity: 0; }
-}
-
-/* 光点下落 */
-@keyframes float-down {
-  0%   { transform: translateY(-20px); opacity: 0; }
-  20%  { opacity: 0.7; }
-  80%  { opacity: 0.5; }
-  100% { transform: translateY(100vh); opacity: 0; }
-}
-
-/* 消息滑入 */
-@keyframes slide-up {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-/* 按钮脉冲环 */
-@keyframes pulse-ring {
-  0%   { box-shadow: 0 0 0 0 rgba(0, 229, 255, 0.5); }
-  100% { box-shadow: 0 0 0 12px rgba(0, 229, 255, 0); }
-}
-
-/* 信号脉冲 */
-@keyframes signal-pulse {
-  0%, 100% { box-shadow: 0 0 4px rgba(0, 229, 255, 0.4); }
-  50% { box-shadow: 0 0 10px rgba(0, 229, 255, 0.8), 0 0 20px rgba(0, 229, 255, 0.3); }
-}
-
-/* 轨道旋转 */
-@keyframes orbit-spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
-}
-
-/* ---------- 响应式 ---------- */
-@media (max-width: 768px) {
-  :root { font-size: 14px; }
-  .hide-mobile { display: none !important; }
-}
-@media (max-width: 480px) {
-  :root { font-size: 13px; }
-  .card-grid { grid-template-columns: 1fr !important; }
-  .container { padding: 0.5rem !important; }
-  .top-bar { padding: 0.3rem 0.5rem !important; }
+@media (max-width: 360px) {
+  :root { --font-base: 4.2vw; }
 }
