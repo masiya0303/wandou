@@ -87,13 +87,20 @@ a { color: var(--accent); text-decoration: none; }
 
 /* 工具类 */
 .glass-panel {
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
+  background: rgba(255,255,255,0.65);
+  border: 1px solid rgba(255,255,255,0.3);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-radius: var(--radius-sm);
 }
 .glass-panel:active { transform: scale(0.985); }
+
+/* 暗色玻璃变体（表单/输入） */
+.glass-dark {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+}
+.glass-dark:focus-within { border-color: var(--accent-cyan); }
 
 .corner-deco { position: relative; }
 .corner-deco::before,
