@@ -14,6 +14,8 @@ export interface InventoryItem {
   description: string
   quantity: number
   type: 'weapon' | 'armor' | 'consumable' | 'material' | 'key' | 'other'
+  /** 可选，物品图标 emoji */
+  icon?: string
 }
 
 /** 任务 */

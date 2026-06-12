@@ -20,6 +20,15 @@ const memoryCount = computed(() => stateStore.memories.filter(m => m.state === '
 
 const invCategories = ['weapon','armor','consumable','material','key','other'] as const
 const catLabels: Record<string, string> = { weapon:'⚔️武器', armor:'🛡️防具', consumable:'🧪消耗品', material:'📦材料', key:'🔑关键', other:'📌其他' }
+const typeIcons: Record<string, string> = { weapon:'⚔️', armor:'🛡️', consumable:'🧪', material:'📦', key:'🔑', other:'📌' }
+const typeLabels: Record<string, string> = { weapon:'武器', armor:'防具', consumable:'消耗品', material:'材料', key:'关键物品', other:'其他' }
+
+// 物品详情弹窗
+const detailItem = ref<InventoryItem | null>(null)
+
+function openItemDetail(item: InventoryItem) {
+  detailItem.value = item
+}
 const grouped = computed(() => {
   const m: Record<string, InventoryItem[]> = {}
   for (const c of invCategories) m[c] = player.inventory.filter((i: InventoryItem) => i.type === c)
@@ -97,15 +106,42 @@ onUnmounted(() => {
         <div v-for="c in invCategories" :key="c">
           <div v-if="grouped[c].length" class="cat">
             <div class="cat-head">{{ catLabels[c] }} <span class="cat-n">{{ grouped[c].length }}</span></div>
-            <div v-for="it in grouped[c]" :key="it.id" class="inv-item glass-panel">
-              <div class="inv-left">
-                <span class="inv-name">{{ it.name }}</span>
-                <span v-if="it.description" class="inv-desc">{{ it.description }}</span>
+            <div class="inv-grid">
+              <div
+                v-for="it in grouped[c]"
+                :key="it.id"
+                class="inv-cell glass-panel"
+                @click="openItemDetail(it)"
+              >
+                <span class="inv-cell-icon">{{ it.icon || typeIcons[it.type] }}</span>
+                <span class="inv-cell-name">{{ it.name }}</span>
+                <span v-if="it.quantity > 1" class="inv-cell-qty">{{ it.quantity }}</span>
               </div>
-              <span v-if="it.quantity > 1" class="inv-qty">×{{ it.quantity }}</span>
             </div>
           </div>
         </div>
+
+        <!-- 物品详情弹窗 -->
+        <Teleport to="body">
+          <Transition name="modal">
+            <div v-if="detailItem" class="modal-overlay" @click.self="detailItem = null">
+              <div class="modal-card glass-panel">
+                <div class="modal-top">
+                  <span class="modal-icon">{{ detailItem.icon || typeIcons[detailItem.type] }}</span>
+                  <span class="modal-name">{{ detailItem.name }}</span>
+                  <button class="modal-close" @click="detailItem = null">✕</button>
+                </div>
+                <div class="modal-body">
+                  <div class="modal-meta">
+                    <span class="modal-type-tag">{{ typeLabels[detailItem.type] }}</span>
+                    <span class="modal-qty">数量: {{ detailItem.quantity }}</span>
+                  </div>
+                  <p class="modal-desc">{{ detailItem.description || '暂无描述' }}</p>
+                </div>
+              </div>
+            </div>
+          </Transition>
+        </Teleport>
       </template>
       <!-- npc -->
       <template v-if="tab === 'npc'">
@@ -229,13 +265,157 @@ onUnmounted(() => {
 /* inventory */
 .none { text-align: center; padding: 32px 16px; color: var(--theme-text-main); font-size: 13px; opacity: 0.6; }
 .cat { margin-bottom: 8px; }
-.cat-head { font-size: 12px; font-weight: 600; color: var(--theme-text-accent); margin-bottom: 4px; display: flex; align-items: baseline; gap: 4px; }
+.cat-head { font-size: 12px; font-weight: 600; color: var(--theme-text-accent); margin-bottom: 6px; display: flex; align-items: baseline; gap: 4px; }
 .cat-n { font-size: 11px; color: var(--theme-text-main); font-weight: 400; opacity: 0.6; }
-.inv-item { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 8px 10px; border-radius: 8px; background: rgba(255,182,193,0.1); margin-bottom: 3px; font-size: 13px; }
-.inv-left { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.inv-name { color: var(--theme-text-main); font-weight: 500; }
-.inv-desc { font-size: 10px; color: var(--theme-text-main); opacity: 0.5; line-height: 1.3; }
-.inv-qty { color: var(--theme-text-accent); font-size: 11px; font-weight: 600; flex-shrink: 0; }
+
+/* 物品格子 */
+.inv-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.inv-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 12px 6px 10px;
+  border-radius: 12px;
+  background: rgba(255,182,193,0.12);
+  cursor: pointer;
+  min-height: 80px;
+  transition: transform 0.15s, background 0.15s;
+  user-select: none;
+}
+.inv-cell:active {
+  transform: scale(0.95);
+  background: rgba(255,128,168,0.22);
+}
+.inv-cell-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+.inv-cell-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--theme-text-main);
+  text-align: center;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-all;
+}
+.inv-cell-qty {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  background: var(--theme-text-accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  line-height: 18px;
+  text-align: center;
+  border-radius: 9px;
+  padding: 0 5px;
+}
+
+/* 物品详情弹窗 */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.modal-card {
+  width: 100%;
+  max-width: 320px;
+  border-radius: 20px;
+  padding: 20px;
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+}
+.modal-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.modal-icon {
+  font-size: 36px;
+  line-height: 1;
+}
+.modal-name {
+  flex: 1;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--theme-text-main);
+}
+.modal-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--theme-border-light);
+  background: none;
+  color: var(--theme-text-main);
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.modal-close:active { color: #e55; }
+.modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.modal-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.modal-type-tag {
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--theme-text-accent);
+  padding: 2px 10px;
+  border-radius: 10px;
+}
+.modal-qty {
+  font-size: 13px;
+  color: var(--theme-text-main);
+  font-weight: 500;
+}
+.modal-desc {
+  font-size: 14px;
+  color: var(--theme-text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* modal transition */
+.modal-enter-active { transition: all 0.2s ease-out; }
+.modal-leave-active { transition: all 0.15s ease-in; }
+.modal-enter-from { opacity: 0; }
+.modal-enter-from .modal-card { transform: scale(0.9); }
+.modal-leave-to { opacity: 0; }
+.modal-leave-to .modal-card { transform: scale(0.95); }
 .card { padding: 8px 10px; border-radius: 8px; margin-bottom: 6px; background: rgba(255,182,193,0.1); }
 .card-head { display: flex; align-items: baseline; gap: 6px; margin-bottom: 2px; }
 .card-name { font-size: 13px; font-weight: 600; color: var(--theme-text-main); }
