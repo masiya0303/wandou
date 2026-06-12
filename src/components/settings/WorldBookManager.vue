@@ -404,10 +404,10 @@ const POS_LABELS: Record<string, string> = {
 </template>
 
 <style scoped>
-.wb { height: 100%; color: var(--theme-text-main); }
+.wb { flex: 1; min-height: 0; display: flex; flex-direction: column; color: var(--theme-text-main); }
 
 /* ---- 书列表 ---- */
-.book-list { display: flex; flex-direction: column; gap: 10px; }
+.book-list { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
 .book-card {
   display: flex; align-items: center; gap: 12px;
   padding: 14px 18px; border-radius: 16px; cursor: pointer; transition: all 0.25s;
@@ -423,7 +423,7 @@ const POS_LABELS: Record<string, string> = {
 .book-card:active .bk-arrow { opacity: 0.8; transform: translateX(4px); }
 
 /* ---- 条目视图 ---- */
-.entry-view { display: flex; flex-direction: column; gap: 10px; height: 100%; }
+.entry-view { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; }
 .ev-header { display: flex; align-items: center; gap: 10px; }
 .ev-header h3 { font-size: 16px; color: var(--theme-text-main); margin: 0; flex: 1; }
 .cnt { font-size: 12px; color: var(--theme-text-main); opacity: 0.45; }

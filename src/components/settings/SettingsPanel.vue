@@ -278,7 +278,7 @@ const EXPAND_TITLES: Record<string, string> = { api:'🔌 API 配置', prompt:'�
 .ss-btn:active { background: var(--theme-border-ice); border-color: var(--theme-border-light); }
 
 /* ---- expanded detail ---- */
-.ss-expand { position: relative; z-index: 1; display: flex; flex-direction: column; height: 100%; padding: 0 16px 16px; animation: slideRightIn 0.2s ease-out; }
+.ss-expand { position: relative; z-index: 1; display: flex; flex-direction: column; height: 100%; padding: 0 16px 16px; overflow: hidden; animation: slideRightIn 0.2s ease-out; }
 @keyframes slideRightIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
 .ex-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; flex-shrink: 0; border-bottom: 1px solid var(--theme-border-ice); }
 .ex-head h2 { font-size: 18px; color: #e0e8ff; margin: 0; }
