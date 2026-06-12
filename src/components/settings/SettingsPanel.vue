@@ -280,18 +280,18 @@ const EXPAND_TITLES: Record<string, string> = { api:'🔌 API 配置', prompt:'�
 .ss-btn:active { background: var(--theme-border-ice); border-color: var(--theme-border-light); }
 
 /* ---- expanded detail ---- */
-.ss-expand { position: relative; z-index: 1; display: flex; flex-direction: column; height: 100%; padding: 0 16px 16px; overflow: hidden; animation: slideRightIn 0.2s ease-out; }
+.ss-expand { position: relative; z-index: 1; display: grid; grid-template-rows: auto 1fr; height: 100%; padding: 0 16px 16px; animation: slideRightIn 0.2s ease-out; }
 @keyframes slideRightIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
-.ex-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; flex-shrink: 0; border-bottom: 1px solid var(--theme-border-ice); }
+.ex-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--theme-border-ice); }
 .ex-head h2 { font-size: 18px; color: #e0e8ff; margin: 0; }
 .ex-back { padding: 6px 14px; border-radius: 20px; border: 1px solid var(--theme-border-ice); background: rgba(255,255,255,0.5); color: var(--theme-text-main); font-size: 12px; cursor: pointer; font-family: inherit; }
 .ex-back:active { background: var(--theme-border-ice); }
 
-/* worldbook 专用 — 直接撑满 flex 空间，不经过滚动容器 */
-.ex-fill { flex: 1; min-height: 0; position: relative; overflow: hidden; padding: 12px; border-radius: 16px; background: rgba(255,255,255,0.55); border: 1px solid var(--theme-border-ice); }
+/* worldbook 专用 */
+.ex-fill { min-height: 0; position: relative; padding: 12px; border-radius: 16px; background: rgba(255,255,255,0.55); border: 1px solid var(--theme-border-ice); }
 
 /* 其他卡片 — 可滚动 */
-.ex-body { flex: 1; overflow-y: auto; padding: 16px 0; max-width: 540px; width: 100%; margin: 0 auto; }
+.ex-body { overflow-y: auto; padding: 16px 0; max-width: 540px; width: 100%; margin: 0 auto; }
 
 /* ---- form ---- */
 .form-card { padding: 20px; border-radius: 16px; background: rgba(255,255,255,0.55); border: 1px solid var(--theme-border-ice); }
