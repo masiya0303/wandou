@@ -17,9 +17,6 @@ export interface WorldBookEntry {
   // at_constant: 始终注入（不受关键词匹配影响）
 }
 
-/** 世界书包 = 条目数组 */
-export type WorldBookPack = WorldBookEntry[]
-
 /** 导入 JSON 时容错的原始条目格式（id 和 enabled 可选） */
 export interface RawWorldBookEntry {
   keys?: string[] | string

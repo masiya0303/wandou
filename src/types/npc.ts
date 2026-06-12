@@ -18,21 +18,11 @@ export interface NpcEntry {
   firstMessage: string      // 首次对话模板（ST 兼容）
   enabled: boolean
   priority: number
-}
-
-/** ST 角色卡原始 JSON */
-export interface StCharCard {
-  name?: string
-  description?: string
-  personality?: string
-  scenario?: string
-  first_mes?: string
-  mes_example?: string
-  creator_notes?: string
-  tags?: string[]
-  spec?: string
-  spec_version?: string
-  data?: StCharCard
+  // 运行时动态字段
+  favor?: number
+  favorability?: number
+  currentHp?: number
+  maxHp?: number
 }
 
 /** 导入结果 */

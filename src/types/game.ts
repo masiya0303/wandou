@@ -25,4 +25,6 @@ export interface CharacterInfo {
   age: number
   gender: string
   background: string
+  gold?: number
+  attributes?: Record<string, number>
 }

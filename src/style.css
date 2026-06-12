@@ -51,18 +51,18 @@
 
   /* 渐变 */
   --gradient-accent: linear-gradient(90deg, transparent, var(--accent), transparent);
-  --theme-chat-bg: url('/splash-bg.png');
-  --theme-panel-bg: url('/splash-bg.png');
-  --theme-bubble-bg: none;
+  --theme-chat-bg: url(https://files.catbox.moe/kak943.jpeg);
+  --theme-panel-bg: url(https://files.catbox.moe/im5vzu.jpeg);
+  --theme-bubble-img: url(https://files.catbox.moe/dirxg3.jpeg);
 
-  /* === bjd粉色主题 === */
-  --pink-primary: rgba(112, 88, 98, 0.81);
-  --pink-accent: #ff80a8;
-  --pink-light: #ffccdc;
-  --pink-ice: #ffe6ee;
-  --pink-italic: rgba(216, 120, 138, 1);
-  --pink-bubble-bg: linear-gradient(145deg, #ffffff, #ffe6f2);
-  --pink-input-bg: linear-gradient(180deg, #ffffff, #ffe6ee);
+  /* === 语义化主题变量（默认 bjd粉色） === */
+  --theme-text-main:      rgba(112, 88, 98, 0.81);
+  --theme-text-accent:    #ff80a8;
+  --theme-text-secondary: rgba(216, 120, 138, 1);
+  --theme-border-light:   #ffccdc;
+  --theme-border-ice:     #ffe6ee;
+  --theme-bubble-bg:      linear-gradient(145deg, #ffffff, #ffe6f2);
+  --theme-input-bg:       linear-gradient(180deg, #ffffff, #ffe6ee);
 
   font-family: 'Noto Sans SC', 'Roboto', system-ui, sans-serif;
   font-size: var(--font-base);
@@ -122,8 +122,8 @@ a { color: var(--accent); text-decoration: none; }
 
 /* 暗色玻璃面板变体（粉色） */
 .glass-pink {
-  background: var(--pink-bubble-bg);
-  border: 3px solid var(--pink-ice);
+  background: var(--theme-bubble-bg);
+  border: 3px solid var(--theme-border-ice);
   border-radius: 20px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.06);
 }
@@ -141,8 +141,14 @@ a { color: var(--accent); text-decoration: none; }
 
 @media (max-width: 480px) {
   :root {
-    --font-xs: 3.2vw; --font-sm: 4vw; --font-base: 4.5vw;
-    --font-lg: 5.5vw; --font-xl: 7vw;
-    --space-xs: 2vw; --space-sm: 4vw; --space-md: 6vw; --space-lg: 10vw;
+    --font-xs:  clamp(10px, 3.2vw, 11px);
+    --font-sm:  clamp(13px, 4vw, 14px);
+    --font-base: clamp(14px, 4.5vw, 16px);
+    --font-lg:  clamp(17px, 5.5vw, 21px);
+    --font-xl:  clamp(22px, 7vw, 28px);
+    --space-xs: clamp(4px, 2vw, 6px);
+    --space-sm: clamp(8px, 4vw, 12px);
+    --space-md: clamp(14px, 6vw, 20px);
+    --space-lg: clamp(22px, 10vw, 32px);
   }
 }

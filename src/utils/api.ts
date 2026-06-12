@@ -1,17 +1,18 @@
 // ============================================================
-// wandou — LLM API (bridge 流式解析 + 超时 + 中止)
+// wandou — LLM API (bridge 流式解析 + 重试 + 中止)
 // ============================================================
 
 import type { ApiConfig, GameMessage } from '../types/game'
 
 let activeAbort: AbortController | null = null
 
-// 中止正在进行的请求
+/** 中止正在进行的请求 */
 export function abortGeneration() {
   if (activeAbort) { activeAbort.abort('stopped_by_user'); activeAbort = null }
 }
 
-// 兼容多种上游 (OpenAI / Gemini中转 / 推理模型) 的 delta 文本提取
+// ---- delta 提取 ----
+
 function extractDelta(parsed: any): string {
   if (!parsed || typeof parsed !== 'object') return ''
   const ch = parsed.choices?.[0]
@@ -28,7 +29,6 @@ function extractDelta(parsed: any): string {
   return parts.join('')
 }
 
-// 规范化 base URL
 function normalizeUrl(url: string): string {
   let clean = url.trim().replace(/\/+$/, '')
   if (!clean) return ''
@@ -36,14 +36,31 @@ function normalizeUrl(url: string): string {
   return clean
 }
 
+// ---- 错误分类 ----
+
+function classifyError(status: number, body: string): string {
+  if (status === 401 || status === 403) return 'API Key 无效或无权访问该模型，请检查设置'
+  if (status === 429) return '请求过于频繁，请稍后再试'
+  if (status === 502 || status === 503) return '上游服务暂时不可用，正在重试...'
+  if (status >= 500) return `服务器错误 (${status})`
+  // 尝试解析 body 中的错误信息
+  try {
+    const err = JSON.parse(body)
+    if (err.error?.message) return err.error.message
+  } catch { /* raw text */ }
+  return `API 错误 ${status}`
+}
+
+// ---- 流式请求 ----
+
 export async function chatStream(
   config: ApiConfig,
   systemPrompt: string,
   history: GameMessage[],
   onChunk: (chunk: string) => void,
   signal?: AbortSignal,
+  retries = 1,
 ): Promise<string> {
-  // 中止旧请求
   if (activeAbort) { activeAbort.abort('replaced'); activeAbort = null }
 
   const ac = new AbortController()
@@ -73,67 +90,84 @@ export async function chatStream(
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (config.apiKey) headers.Authorization = `Bearer ${config.apiKey.trim()}`
 
-  try {
-    const response = await fetch(url, {
-      method: 'POST', headers, body,
-      signal: ac.signal,
-    })
-
-    if (!response.ok) {
-      const text = await response.text().catch(() => '')
-      const hint = (response.status === 401 || response.status === 403)
-        ? '\n提示：API Key 无效或无权访问该模型。'
-        : ''
-      throw new Error(`API 错误 ${response.status}: ${text}${hint}`)
+  let lastError: Error | null = null
+  let full = ''
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    if (attempt > 0) {
+      // 重试前等一小段
+      await new Promise(r => setTimeout(r, 800 * attempt))
     }
 
-    if (!response.body) throw new Error('上游未返回流式 body')
+    try {
+      const response = await fetch(url, {
+        method: 'POST', headers, body,
+        signal: ac.signal,
+      })
 
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let full = ''
-    let buffer = ''
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      for (const line of lines) {
-        const trimmed = line.trim()
-        if (!trimmed.startsWith('data:')) continue
-        const payload = trimmed.slice(5).trim()
-        if (!payload || payload === '[DONE]') continue
-
-        const parsed = safeParse(payload)
-        const token = extractDelta(parsed)
-        if (!token) continue
-
-        full += token
-        onChunk(token)
+      if (!response.ok) {
+        const text = await response.text().catch(() => '')
+        const msg = classifyError(response.status, text)
+        // 502/503 可重试，其他直接抛
+        if ((response.status === 502 || response.status === 503) && attempt < retries) {
+          lastError = new Error(msg)
+          continue
+        }
+        throw new Error(msg)
       }
-    }
 
-    // 处理最后一行
-    if (buffer.trim()) {
-      const trimmed = buffer.trim()
-      if (trimmed.startsWith('data:')) {
-        const payload = trimmed.slice(5).trim()
-        if (payload && payload !== '[DONE]') {
+      if (!response.body) throw new Error('上游未返回流式 body')
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (!trimmed.startsWith('data:')) continue
+          const payload = trimmed.slice(5).trim()
+          if (!payload || payload === '[DONE]') continue
+
           const parsed = safeParse(payload)
           const token = extractDelta(parsed)
-          if (token) { full += token; onChunk(token) }
+          if (!token) continue
+
+          full += token
+          onChunk(token)
         }
       }
-    }
 
-    return full
-  } finally {
-    if (activeAbort === ac) activeAbort = null
+      // 处理最后一行
+      if (buffer.trim()) {
+        const trimmed = buffer.trim()
+        if (trimmed.startsWith('data:')) {
+          const payload = trimmed.slice(5).trim()
+          if (payload && payload !== '[DONE]') {
+            const parsed = safeParse(payload)
+            const token = extractDelta(parsed)
+            if (token) { full += token; onChunk(token) }
+          }
+        }
+      }
+
+      return full
+    } catch (e: any) {
+      if (e.name === 'AbortError') {
+        // 用户主动停止 → 返回已收集的部分内容，不抛错
+        return full
+      }
+      lastError = e
+    }
   }
+
+  throw lastError || new Error('请求失败')
 }
 
 function safeParse(raw: string): any {

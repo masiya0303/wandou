@@ -2,9 +2,10 @@
 // wandou v0.7 — 豌豆星际漂流 · 世界类型
 // ============================================================
 
-import type { CharacterInfo, GameMessage, ApiConfig } from './game'
+import type { CharacterInfo, GameMessage } from './game'
 import type { WorldBookEntry } from './worldBook'
 import type { NpcEntry } from './npc'
+import type { GameLocation, WorldEvent, MemoryEntry, NpcRelation } from './state'
 
 /** 背包物品 */
 export interface InventoryItem {
@@ -38,6 +39,18 @@ export interface World {
   messages: GameMessage[]
   worldBook: WorldBookEntry[]
   worldBookEnabled: boolean
+  /** 状态同步系统：世界状态 */
+  stateData?: WorldSaveState
+}
+
+export interface WorldSaveState {
+  worldTime: string
+  currentLocation: GameLocation
+  weather: string
+  worldEvents: WorldEvent[]
+  memories: MemoryEntry[]
+  npcRelations: NpcRelation[]
+  turnIndex: number
 }
 
 export interface WorldMeta {
@@ -45,6 +58,3 @@ export interface WorldMeta {
   messageCount: number; createdAt: number; updatedAt: number
 }
 
-export interface WorldSave {
-  version: string; world: World; apiConfig: ApiConfig
-}
