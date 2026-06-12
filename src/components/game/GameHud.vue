@@ -40,6 +40,13 @@ const doneQ = computed(() => player.quests.filter((q: Quest) => q.status === 'co
 const gold = computed(() => player.character.gold ?? 0)
 const attrs = computed(() => player.character.attributes ?? {})
 
+// 空格子数量 — 最少显示一排空槽
+const SLOTS_PER_ROW = 4
+const MIN_SLOTS = 20
+const emptySlots = computed(() =>
+  Math.max(0, Math.max(MIN_SLOTS, Math.ceil(player.inventory.length / SLOTS_PER_ROW) * SLOTS_PER_ROW) - player.inventory.length)
+)
+
 // ---- Toast 通知 ----
 const toastVisible = ref(false)
 const toastMessage = ref('')
@@ -102,24 +109,27 @@ onUnmounted(() => {
           <span class="stat-coins">🪙 {{ gold }} G</span>
           <span v-for="(v, k) in attrs" :key="k" class="stat-attr">{{ k }}: {{ v }}</span>
         </div>
-        <div v-if="player.inventory.length === 0" class="none">背包空空如也</div>
-        <div v-for="c in invCategories" :key="c">
-          <div v-if="grouped[c].length" class="cat">
-            <div class="cat-head">{{ catLabels[c] }} <span class="cat-n">{{ grouped[c].length }}</span></div>
-            <div class="inv-grid">
-              <div
-                v-for="it in grouped[c]"
-                :key="it.id"
-                class="inv-cell glass-panel"
-                @click="openItemDetail(it)"
-              >
-                <span class="inv-cell-icon">{{ it.icon || typeIcons[it.type] }}</span>
-                <span class="inv-cell-name">{{ it.name }}</span>
-                <span v-if="it.quantity > 1" class="inv-cell-qty">{{ it.quantity }}</span>
-              </div>
-            </div>
+
+        <!-- 背包统一槽位网格 -->
+        <div class="inv-slot-grid">
+          <div
+            v-for="(it, idx) in player.inventory"
+            :key="it.id"
+            class="inv-slot"
+            @click="openItemDetail(it)"
+          >
+            <span class="inv-slot-icon">{{ it.icon || typeIcons[it.type] }}</span>
+            <span class="inv-slot-name">{{ it.name }}</span>
+            <span class="inv-slot-qty" :class="{ solo: it.quantity === 1 }">{{ it.quantity }}</span>
           </div>
+          <!-- 空格子 -->
+          <div
+            v-for="n in emptySlots"
+            :key="'e'+n"
+            class="inv-slot inv-slot--empty"
+          ></div>
         </div>
+        <div v-if="player.inventory.length === 0" class="none">背包空空如也</div>
 
         <!-- 物品详情弹窗 -->
         <Teleport to="body">
@@ -264,65 +274,98 @@ onUnmounted(() => {
 
 /* inventory */
 .none { text-align: center; padding: 32px 16px; color: var(--theme-text-main); font-size: 13px; opacity: 0.6; }
-.cat { margin-bottom: 8px; }
-.cat-head { font-size: 12px; font-weight: 600; color: var(--theme-text-accent); margin-bottom: 6px; display: flex; align-items: baseline; gap: 4px; }
+.cat { margin-bottom: 0; }
+.cat-head { font-size: 11px; font-weight: 600; color: var(--theme-text-accent); margin-bottom: 4px; display: flex; align-items: baseline; gap: 4px; }
 .cat-n { font-size: 11px; color: var(--theme-text-main); font-weight: 400; opacity: 0.6; }
 
-/* 物品格子 */
-.inv-grid {
+/* ===== 游戏网状槽位背包 ===== */
+.inv-slot-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  padding: 2px;
 }
-.inv-cell {
+.inv-slot {
   position: relative;
+  aspect-ratio: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 12px 6px 10px;
-  border-radius: 12px;
-  background: rgba(255,182,193,0.12);
+  gap: 2px;
+  padding: 4px;
+  border-radius: 4px;
   cursor: pointer;
-  min-height: 80px;
-  transition: transform 0.15s, background 0.15s;
   user-select: none;
+  /* 游戏风格边框 — 外暗内亮 */
+  border: 2px solid #c4a0a8;
+  background:
+    linear-gradient(145deg, rgba(255,245,248,0.95), rgba(255,225,235,0.85));
+  box-shadow:
+    inset 0 1px 2px rgba(255,255,255,0.7),
+    inset 0 -2px 3px rgba(180,140,148,0.25),
+    0 1px 0 rgba(255,255,255,0.6),
+    0 2px 4px rgba(0,0,0,0.06);
+  transition: transform 0.1s, box-shadow 0.1s, border-color 0.1s;
 }
-.inv-cell:active {
-  transform: scale(0.95);
-  background: rgba(255,128,168,0.22);
+.inv-slot:active {
+  transform: scale(0.94);
+  border-color: var(--theme-text-accent);
+  box-shadow:
+    inset 0 1px 2px rgba(255,255,255,0.5),
+    0 0 0 2px rgba(255,128,168,0.35);
 }
-.inv-cell-icon {
-  font-size: 28px;
+
+/* 空格子 */
+.inv-slot--empty {
+  border: 2px solid rgba(196,160,168,0.3);
+  background:
+    linear-gradient(145deg, rgba(255,245,248,0.35), rgba(255,225,235,0.2));
+  box-shadow:
+    inset 0 1px 1px rgba(255,255,255,0.3),
+    0 1px 0 rgba(255,255,255,0.2);
+  cursor: default;
+  pointer-events: none;
+}
+
+.inv-slot-icon {
+  font-size: 26px;
   line-height: 1;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.1));
 }
-.inv-cell-name {
-  font-size: 11px;
+.inv-slot-name {
+  font-size: 9px;
   font-weight: 500;
-  color: var(--theme-text-main);
+  color: #5a3e44;
   text-align: center;
-  line-height: 1.2;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  line-height: 1.15;
+  max-width: 100%;
   overflow: hidden;
-  word-break: break-all;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.inv-cell-qty {
+.inv-slot-qty {
   position: absolute;
-  top: 4px;
-  right: 6px;
-  background: var(--theme-text-accent);
+  bottom: 3px;
+  right: 4px;
   color: #fff;
   font-size: 10px;
   font-weight: 700;
   min-width: 18px;
-  height: 18px;
-  line-height: 18px;
+  height: 17px;
+  line-height: 17px;
   text-align: center;
-  border-radius: 9px;
+  border-radius: 8px;
   padding: 0 5px;
+  background: var(--theme-text-accent);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+}
+.inv-slot-qty.solo {
+  background: rgba(180,140,148,0.55);
+  font-size: 9px;
+  min-width: 15px;
+  height: 15px;
+  line-height: 15px;
 }
 
 /* 物品详情弹窗 */
