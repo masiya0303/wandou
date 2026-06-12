@@ -284,10 +284,10 @@ const EXPAND_TITLES: Record<string, string> = { api:'🔌 API 配置', prompt:'�
 .ex-head h2 { font-size: 18px; color: #e0e8ff; margin: 0; }
 .ex-back { padding: 6px 14px; border-radius: 20px; border: 1px solid var(--theme-border-ice); background: rgba(255,255,255,0.5); color: var(--theme-text-main); font-size: 12px; cursor: pointer; font-family: inherit; }
 .ex-back:active { background: var(--theme-border-ice); }
-.ex-body { flex: 1; overflow-y: auto; padding: 16px 0; max-width: 540px; width: 100%; margin: 0 auto; }
+.ex-body { flex: 1; overflow-y: auto; padding: 16px 0; max-width: 540px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; }
 
 /* ---- form ---- */
-.form-card { padding: 20px; border-radius: 16px; background: rgba(255,255,255,0.55); border: 1px solid var(--theme-border-ice); }
+.form-card { padding: 20px; border-radius: 16px; background: rgba(255,255,255,0.55); border: 1px solid var(--theme-border-ice); flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .fg { margin-bottom: 14px; }
 .fg label { display: block; font-size: 12px; color: var(--theme-text-main); margin-bottom: 4px; font-weight: 500; }
 .l-en { font-size: 8px; color: var(--theme-text-main); opacity: 0.35; letter-spacing: 0.1em; margin-left: 4px; }

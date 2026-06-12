@@ -1,6 +1,6 @@
 <!-- wandou · 世界书管理 + 正则替换 — 点条目弹出详情编辑 -->
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useWorldStore } from '@/stores/worldStore'
 import { useWorldBookStore } from '@/stores/worldBookStore'
 import { useRegexStore } from '@/stores/regexStore'
@@ -125,15 +125,18 @@ function openBook(target: string) {
     view.value = 'regex'
     return
   }
-  if (target === 'global') {
-    wbs.initGlobalBook()
-  } else {
+  if (target !== 'global') {
     loadingBook.value = true
     wbs.loadForBrowse(target)
     loadingBook.value = false
   }
   view.value = target
 }
+
+// 确保全局世界书已初始化（仅首次挂载时补一次）
+onMounted(() => {
+  if (wbs.globalWorldBook.length === 0) wbs.initGlobalBook()
+})
 
 function backToList() { view.value = 'list' }
 
