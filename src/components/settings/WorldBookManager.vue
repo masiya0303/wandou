@@ -263,10 +263,15 @@ const POS_LABELS: Record<string, string> = {
         <div class="list">
           <!-- 正则条目 -->
           <template v-if="view === 'regex'">
-            <div v-for="e in filteredRegexEntries" :key="e.id" :class="['card', { off: e.disabled }]">
+            <div
+              v-for="e in filteredRegexEntries"
+              :key="e.id"
+              :class="['card', { off: e.disabled }]"
+              @click="openEditRegex(e)"
+            >
               <div class="r1">
-                <ToggleSwitch :modelValue="!e.disabled" @update:modelValue="toggle(e.id)" />
-                <div class="i" @click="openEditRegex(e)">
+                <ToggleSwitch :modelValue="!e.disabled" @update:modelValue="toggle(e.id)" @click.stop />
+                <div class="i">
                   <span class="nm">{{ e.scriptName || '（未命名规则）' }}</span>
                   <div class="ks">
                     <span class="kt regex-ptn">{{ e.findRegex?.slice(0, 60) }}{{ e.findRegex?.length > 60 ? '...' : '' }}</span>
@@ -274,16 +279,21 @@ const POS_LABELS: Record<string, string> = {
                     <span v-if="e.placement?.includes(2)" class="kt dim">显示前</span>
                   </div>
                 </div>
-                <button class="del" @click="remove(e.id)">🗑️</button>
+                <button class="del" @click.stop="remove(e.id)">🗑️</button>
               </div>
             </div>
           </template>
           <!-- 世界书条目 -->
           <template v-else>
-            <div v-for="e in filteredWbEntries" :key="e.id" :class="['card', { off: !e.enabled }]">
+            <div
+              v-for="e in filteredWbEntries"
+              :key="e.id"
+              :class="['card', { off: !e.enabled }]"
+              @click="openEditWb(e)"
+            >
               <div class="r1">
-                <ToggleSwitch :modelValue="e.enabled" @update:modelValue="toggle(e.id)" />
-                <div class="i" @click="openEditWb(e)">
+                <ToggleSwitch :modelValue="e.enabled" @update:modelValue="toggle(e.id)" @click.stop />
+                <div class="i">
                   <span class="nm">{{ e.comment || '（未命名条目）' }}</span>
                   <div class="ks">
                     <span v-for="k in e.keys?.slice(0, 5)" :key="k" class="kt">{{ k }}</span>
@@ -291,9 +301,9 @@ const POS_LABELS: Record<string, string> = {
                   </div>
                 </div>
                 <span class="pri">{{ e.position === 'at_constant' ? '📌' : '#' + e.priority }}</span>
-                <button class="del" @click="remove(e.id)">🗑️</button>
+                <button class="del" @click.stop="remove(e.id)">🗑️</button>
               </div>
-              <p class="pre" @click="openEditWb(e)">{{ e.content?.slice(0, 100) }}{{ e.content?.length > 100 ? '...' : '' }}</p>
+              <p class="pre">{{ e.content?.slice(0, 100) }}{{ e.content?.length > 100 ? '...' : '' }}</p>
             </div>
           </template>
         </div>
