@@ -158,6 +158,11 @@ export const useWorldBookStore = defineStore('worldBook', () => {
     worldBookEnabled.value = data.enabled !== false
   }
 
+  /** 手动保存全局世界书（编辑条目后调用） */
+  function saveGlobalBook() { _saveGlobalWb() }
+  /** 手动保存浏览中的世界书 */
+  function saveBrowsingBook() { _saveBrowsingBook() }
+
   return {
     globalWorldBook, globalWorldBookEnabled, worldBook, worldBookEnabled,
     browsingBook, browsingBookEnabled, browsingWorldId, browsingWorldName,
@@ -168,5 +173,6 @@ export const useWorldBookStore = defineStore('worldBook', () => {
     loadForBrowse, clearBrowse,
     addBrowsingEntries, removeBrowsingEntry, toggleBrowsingEntry, resetBrowsingBook,
     snapshotWorldBook, restoreWorldBook,
+    saveGlobalBook, saveBrowsingBook,
   }
 })

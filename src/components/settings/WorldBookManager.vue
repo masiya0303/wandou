@@ -1,6 +1,6 @@
-<!-- wandou · 世界书管理 + 正则替换 -->
+<!-- wandou · 世界书管理 + 正则替换 — 点条目弹出详情编辑 -->
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, reactive } from 'vue'
 import { useWorldStore } from '@/stores/worldStore'
 import { useWorldBookStore } from '@/stores/worldBookStore'
 import { useRegexStore } from '@/stores/regexStore'
@@ -20,6 +20,69 @@ const view = ref('list')
 const loadingBook = ref(false)
 const searchText = ref('')
 
+// ---- 条目详情编辑弹窗 ----
+type EditTarget = { type: 'wb'; entry: WorldBookEntry; view: string } | { type: 'regex'; entry: RegexEntry } | null
+const editTarget = ref<EditTarget>(null)
+const editForm = reactive({
+  comment: '', keysStr: '', content: '', priority: 50, position: 'before' as WorldBookEntry['position'], enabled: true,
+  // regex fields
+  scriptName: '', findRegex: '', replaceString: '', disabled: false,
+  placement1: true, placement2: true,
+})
+const editSaved = ref(false)
+
+function openEditWb(e: WorldBookEntry) {
+  editTarget.value = { type: 'wb', entry: e, view: view.value }
+  editForm.comment = e.comment || ''
+  editForm.keysStr = (e.keys || []).join(', ')
+  editForm.content = e.content || ''
+  editForm.priority = e.priority
+  editForm.position = e.position
+  editForm.enabled = e.enabled
+  editSaved.value = false
+}
+
+function openEditRegex(e: RegexEntry) {
+  editTarget.value = { type: 'regex', entry: e }
+  editForm.scriptName = e.scriptName || ''
+  editForm.findRegex = e.findRegex || ''
+  editForm.replaceString = e.replaceString || ''
+  editForm.disabled = e.disabled
+  editForm.placement1 = !!(e.placement && e.placement.includes(1))
+  editForm.placement2 = !!(e.placement && e.placement.includes(2))
+  editSaved.value = false
+}
+
+function saveEdit() {
+  if (!editTarget.value) return
+  if (editTarget.value.type === 'wb') {
+    const t = editTarget.value
+    t.entry.comment = editForm.comment
+    t.entry.keys = editForm.keysStr.split(',').map(s => s.trim()).filter(Boolean)
+    t.entry.content = editForm.content
+    t.entry.priority = editForm.priority
+    t.entry.position = editForm.position
+    t.entry.enabled = editForm.enabled
+    // 回写 storage
+    if (t.view === 'global') wbs.saveGlobalBook()
+    else wbs.saveBrowsingBook()
+  } else {
+    const t = editTarget.value
+    t.entry.scriptName = editForm.scriptName
+    t.entry.findRegex = editForm.findRegex
+    t.entry.replaceString = editForm.replaceString
+    t.entry.disabled = editForm.disabled
+    const pl: number[] = []
+    if (editForm.placement1) pl.push(1)
+    if (editForm.placement2) pl.push(2)
+    t.entry.placement = pl.length === 2 ? undefined : (pl.length === 0 ? [1] : pl as any)
+    regex.save()
+  }
+  editSaved.value = true
+  setTimeout(() => { editSaved.value = false }, 2000)
+}
+
+// ---- 正则/世界书匹配 ----
 function matchRegexEntry(e: RegexEntry, q: string): boolean {
   return (e.scriptName || '').toLowerCase().includes(q)
     || e.findRegex.toLowerCase().includes(q)
@@ -65,7 +128,6 @@ function openBook(target: string) {
 
 function backToList() { view.value = 'list' }
 
-// 扩展被禁用时自动回到列表
 watch(() => extStore.isEnabled('regex'), (enabled) => {
   if (!enabled && view.value === 'regex') view.value = 'list'
 })
@@ -132,6 +194,10 @@ function remove(id: string) {
 function reset() {
   if (view.value === 'regex') regex.reset()
   else view.value === 'global' ? wbs.resetGlobalBook() : wbs.resetBrowsingBook()
+}
+
+const POS_LABELS: Record<string, string> = {
+  before: '⬆ 角色定义前', after: '⬇ 角色定义后', at_constant: '📌 始终注入',
 }
 </script>
 
@@ -200,7 +266,7 @@ function reset() {
             <div v-for="e in filteredRegexEntries" :key="e.id" :class="['card', { off: e.disabled }]">
               <div class="r1">
                 <ToggleSwitch :modelValue="!e.disabled" @update:modelValue="toggle(e.id)" />
-                <div class="i">
+                <div class="i" @click="openEditRegex(e)">
                   <span class="nm">{{ e.scriptName || '（未命名规则）' }}</span>
                   <div class="ks">
                     <span class="kt regex-ptn">{{ e.findRegex?.slice(0, 60) }}{{ e.findRegex?.length > 60 ? '...' : '' }}</span>
@@ -217,7 +283,7 @@ function reset() {
             <div v-for="e in filteredWbEntries" :key="e.id" :class="['card', { off: !e.enabled }]">
               <div class="r1">
                 <ToggleSwitch :modelValue="e.enabled" @update:modelValue="toggle(e.id)" />
-                <div class="i">
+                <div class="i" @click="openEditWb(e)">
                   <span class="nm">{{ e.comment || '（未命名条目）' }}</span>
                   <div class="ks">
                     <span v-for="k in e.keys?.slice(0, 5)" :key="k" class="kt">{{ k }}</span>
@@ -227,12 +293,91 @@ function reset() {
                 <span class="pri">{{ e.position === 'at_constant' ? '📌' : '#' + e.priority }}</span>
                 <button class="del" @click="remove(e.id)">🗑️</button>
               </div>
-              <p class="pre">{{ e.content?.slice(0, 100) }}{{ e.content?.length > 100 ? '...' : '' }}</p>
+              <p class="pre" @click="openEditWb(e)">{{ e.content?.slice(0, 100) }}{{ e.content?.length > 100 ? '...' : '' }}</p>
             </div>
           </template>
         </div>
       </div>
     </template>
+
+    <!-- ====== 详情编辑弹窗 ====== -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div v-if="editTarget" class="modal-overlay" @click.self="editTarget = null">
+          <div class="modal-card glass-panel">
+            <div class="modal-top">
+              <span class="modal-icon">{{ editTarget.type === 'regex' ? '📐' : '📖' }}</span>
+              <span class="modal-title">{{ editTarget.type === 'regex' ? '编辑正则规则' : '编辑世界书条目' }}</span>
+              <button class="modal-close" @click="editTarget = null">✕</button>
+            </div>
+            <div class="modal-body">
+
+              <!-- 世界书字段 -->
+              <template v-if="editTarget.type === 'wb'">
+                <div class="fg">
+                  <label>备注 / 标题</label>
+                  <input v-model="editForm.comment" class="fi" placeholder="条目名称..." />
+                </div>
+                <div class="fg">
+                  <label>触发关键词 <span class="l-en">KEYS</span></label>
+                  <input v-model="editForm.keysStr" class="fi" placeholder="逗号分隔，如: 精灵, 森林" />
+                </div>
+                <div class="fg">
+                  <label>注入位置</label>
+                  <div class="pos-row">
+                    <button v-for="p in (['before','after','at_constant'] as const)" :key="p"
+                      :class="['pos-btn', { on: editForm.position === p }]"
+                      @click="editForm.position = p">{{ POS_LABELS[p] }}</button>
+                  </div>
+                </div>
+                <div class="fg-row">
+                  <div class="fg" style="flex:1">
+                    <label>优先级 {{ editForm.priority }}</label>
+                    <input v-model.number="editForm.priority" type="range" min="0" max="100" style="width:100%;accent-color:var(--theme-text-accent)" />
+                  </div>
+                  <div class="fg" style="flex:0 0 70px;display:flex;align-items:center;gap:6px;padding-top:18px">
+                    <ToggleSwitch :modelValue="editForm.enabled" @update:modelValue="editForm.enabled = $event" />
+                    <span style="font-size:11px;color:var(--theme-text-main)">启用</span>
+                  </div>
+                </div>
+                <div class="fg">
+                  <label>正文内容</label>
+                  <textarea v-model="editForm.content" class="fi fi-ta" rows="10" placeholder="注入到 prompt 的背景文本..." style="font-family:monospace;font-size:12px"></textarea>
+                </div>
+              </template>
+
+              <!-- 正则字段 -->
+              <template v-if="editTarget.type === 'regex'">
+                <div class="fg">
+                  <label>规则名称</label>
+                  <input v-model="editForm.scriptName" class="fi" placeholder="例如：去除 [动作] 标记" />
+                </div>
+                <div class="fg">
+                  <label>查找正则 <span class="l-en">FIND</span></label>
+                  <textarea v-model="editForm.findRegex" class="fi fi-ta" rows="3" placeholder="/pattern/flags" style="font-family:monospace;font-size:12px"></textarea>
+                </div>
+                <div class="fg">
+                  <label>替换为 <span class="l-en">REPLACE</span></label>
+                  <textarea v-model="editForm.replaceString" class="fi fi-ta" rows="3" placeholder="替换内容，可用 $1 引用捕获组" style="font-family:monospace;font-size:12px"></textarea>
+                </div>
+                <div class="fg-row" style="align-items:center">
+                  <label style="margin-bottom:0;white-space:nowrap">执行时机</label>
+                  <label class="chk-lbl"><input type="checkbox" v-model="editForm.placement1" /> 发送前</label>
+                  <label class="chk-lbl"><input type="checkbox" v-model="editForm.placement2" /> 显示前</label>
+                  <ToggleSwitch style="margin-left:auto" :modelValue="!editForm.disabled" @update:modelValue="editForm.disabled = !$event" />
+                  <span style="font-size:11px;color:var(--theme-text-main)">启用</span>
+                </div>
+              </template>
+
+              <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+                <button class="sub-save" @click="saveEdit">💾 保存修改</button>
+                <span v-if="editSaved" style="font-size:12px;color:var(--success);white-space:nowrap">✅ 已保存</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -285,7 +430,8 @@ function reset() {
 .card.off { opacity: 0.4; }
 .card:active:not(.off) { background: rgba(255,255,255,0.6); }
 .r1 { display: flex; align-items: flex-start; gap: 8px; }
-.i { flex: 1; min-width: 0; }
+.i { flex: 1; min-width: 0; cursor: pointer; border-radius: 6px; padding: 2px 4px; margin: -2px -4px; transition: background 0.15s; }
+.i:hover { background: rgba(255,128,168,0.06); }
 .nm { font-size: 13px; font-weight: 600; color: var(--theme-text-main); }
 .ks { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 2px; }
 .kt { font-size: 10px; padding: 2px 6px; background: rgba(255,128,168,0.06); border: 1px solid rgba(255,128,168,0.18); border-radius: 10px; color: var(--theme-text-accent); }
@@ -294,5 +440,58 @@ function reset() {
 .pri { font-size: 11px; color: var(--theme-text-main); opacity: 0.4; }
 .del { background: none; border: none; cursor: pointer; font-size: 12px; opacity: 0.3; }
 .del:active { opacity: 1; }
-.pre { font-size: 11px; color: var(--theme-text-main); opacity: 0.5; margin: 4px 0 0; padding-left: 22px; line-height: 1.4; }
+.pre { font-size: 11px; color: var(--theme-text-main); opacity: 0.5; margin: 4px 0 0; padding-left: 22px; line-height: 1.4; cursor: pointer; border-radius: 4px; transition: background 0.15s; }
+.pre:hover { background: rgba(255,128,168,0.04); }
+
+/* ---- 编辑弹窗 ---- */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 300;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.modal-card {
+  width: 100%; max-width: 420px; max-height: 90vh; overflow-y: auto;
+  border-radius: 20px; padding: 20px;
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+}
+.modal-top { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+.modal-icon { font-size: 28px; }
+.modal-title { flex: 1; font-size: 17px; font-weight: 700; color: var(--theme-text-main); }
+.modal-close {
+  width: 28px; height: 28px; border-radius: 50%;
+  border: 1px solid var(--theme-border-light); background: none;
+  color: var(--theme-text-main); cursor: pointer; font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+}
+.modal-close:active { color: #e55; }
+.modal-body { display: flex; flex-direction: column; gap: 12px; }
+
+.fg { margin-bottom: 4px; }
+.fg label { display: block; font-size: 12px; color: var(--theme-text-main); margin-bottom: 4px; font-weight: 500; }
+.l-en { font-size: 8px; color: var(--theme-text-main); opacity: 0.35; letter-spacing: 0.1em; margin-left: 4px; }
+.fi { width: 100%; padding: 9px 11px; border: 1px solid var(--theme-border-ice); border-radius: 10px; background: rgba(255,255,255,0.5); color: var(--theme-text-main); font-size: 14px; font-family: inherit; box-sizing: border-box; transition: border-color 0.2s; }
+.fi:focus { outline: none; border-color: var(--theme-text-accent); box-shadow: 0 0 0 2px rgba(255,128,168,0.08); }
+.fi-ta { resize: vertical; min-height: 60px; }
+.fg-row { display: flex; gap: 12px; }
+.chk-lbl { display: flex; align-items: center; gap: 3px; font-size: 12px; color: var(--theme-text-main); cursor: pointer; }
+
+.pos-row { display: flex; gap: 6px; }
+.pos-btn {
+  flex: 1; padding: 6px 4px; font-size: 11px; text-align: center;
+  border-radius: 10px; border: 1px solid var(--theme-border-ice);
+  background: rgba(255,255,255,0.4); color: var(--theme-text-main);
+  cursor: pointer; font-family: inherit; transition: all 0.15s;
+}
+.pos-btn.on { background: rgba(255,128,168,0.1); border-color: var(--theme-text-accent); color: var(--theme-text-accent); font-weight: 600; }
+.pos-btn:active { background: var(--theme-border-ice); }
+
+.sub-save { flex: 1; padding: 10px; border: none; border-radius: 20px; background: var(--theme-text-accent); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; transition: all 0.2s; }
+.sub-save:active { transform: scale(0.97); opacity: 0.9; }
+
+/* modal transition */
+.modal-enter-active, .modal-leave-active { transition: opacity 0.2s ease-out; }
+.modal-enter-from, .modal-leave-to { opacity: 0; }
 </style>

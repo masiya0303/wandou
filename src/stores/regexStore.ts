@@ -59,6 +59,6 @@ export const useRegexStore = defineStore('regex', () => {
 
   return {
     entries, enabled, enabledCount, totalCount,
-    add, remove, toggle, reset, importFromJson, activeEntries,
+    add, remove, toggle, reset, importFromJson, activeEntries, save,
   }
 })
