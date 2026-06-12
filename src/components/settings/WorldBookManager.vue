@@ -1,6 +1,6 @@
 <!-- wandou · 世界书管理 + 正则替换 — 点条目弹出详情编辑 -->
 <script setup lang="ts">
-import { ref, computed, watch, reactive } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useWorldStore } from '@/stores/worldStore'
 import { useWorldBookStore } from '@/stores/worldBookStore'
 import { useRegexStore } from '@/stores/regexStore'
@@ -23,33 +23,41 @@ const searchText = ref('')
 // ---- 条目详情编辑弹窗 ----
 type EditTarget = { type: 'wb'; entry: WorldBookEntry; view: string } | { type: 'regex'; entry: RegexEntry } | null
 const editTarget = ref<EditTarget>(null)
-const editForm = reactive({
-  comment: '', keysStr: '', content: '', priority: 50, position: 'before' as WorldBookEntry['position'], enabled: true,
-  // regex fields
-  scriptName: '', findRegex: '', replaceString: '', disabled: false,
-  placement1: true, placement2: true,
-})
+// 用独立 ref，避免 reactive 跨类型复用导致的响应式问题
+const efComment = ref('')
+const efKeysStr = ref('')
+const efContent = ref('')
+const efPriority = ref(50)
+const efPosition = ref<WorldBookEntry['position']>('before')
+const efEnabled = ref(true)
+// regex fields
+const efScriptName = ref('')
+const efFindRegex = ref('')
+const efReplaceString = ref('')
+const efDisabled = ref(false)
+const efP1 = ref(true)
+const efP2 = ref(true)
 const editSaved = ref(false)
 
 function openEditWb(e: WorldBookEntry) {
+  efComment.value = e.comment || ''
+  efKeysStr.value = (e.keys || []).join(', ')
+  efContent.value = e.content || ''
+  efPriority.value = e.priority
+  efPosition.value = e.position
+  efEnabled.value = e.enabled
   editTarget.value = { type: 'wb', entry: e, view: view.value }
-  editForm.comment = e.comment || ''
-  editForm.keysStr = (e.keys || []).join(', ')
-  editForm.content = e.content || ''
-  editForm.priority = e.priority
-  editForm.position = e.position
-  editForm.enabled = e.enabled
   editSaved.value = false
 }
 
 function openEditRegex(e: RegexEntry) {
+  efScriptName.value = e.scriptName || ''
+  efFindRegex.value = e.findRegex || ''
+  efReplaceString.value = e.replaceString || ''
+  efDisabled.value = e.disabled
+  efP1.value = !!(e.placement && e.placement.includes(1))
+  efP2.value = !!(e.placement && e.placement.includes(2))
   editTarget.value = { type: 'regex', entry: e }
-  editForm.scriptName = e.scriptName || ''
-  editForm.findRegex = e.findRegex || ''
-  editForm.replaceString = e.replaceString || ''
-  editForm.disabled = e.disabled
-  editForm.placement1 = !!(e.placement && e.placement.includes(1))
-  editForm.placement2 = !!(e.placement && e.placement.includes(2))
   editSaved.value = false
 }
 
@@ -57,24 +65,23 @@ function saveEdit() {
   if (!editTarget.value) return
   if (editTarget.value.type === 'wb') {
     const t = editTarget.value
-    t.entry.comment = editForm.comment
-    t.entry.keys = editForm.keysStr.split(',').map(s => s.trim()).filter(Boolean)
-    t.entry.content = editForm.content
-    t.entry.priority = editForm.priority
-    t.entry.position = editForm.position
-    t.entry.enabled = editForm.enabled
-    // 回写 storage
+    t.entry.comment = efComment.value
+    t.entry.keys = efKeysStr.value.split(',').map(s => s.trim()).filter(Boolean)
+    t.entry.content = efContent.value
+    t.entry.priority = efPriority.value
+    t.entry.position = efPosition.value
+    t.entry.enabled = efEnabled.value
     if (t.view === 'global') wbs.saveGlobalBook()
     else wbs.saveBrowsingBook()
   } else {
     const t = editTarget.value
-    t.entry.scriptName = editForm.scriptName
-    t.entry.findRegex = editForm.findRegex
-    t.entry.replaceString = editForm.replaceString
-    t.entry.disabled = editForm.disabled
+    t.entry.scriptName = efScriptName.value
+    t.entry.findRegex = efFindRegex.value
+    t.entry.replaceString = efReplaceString.value
+    t.entry.disabled = efDisabled.value
     const pl: number[] = []
-    if (editForm.placement1) pl.push(1)
-    if (editForm.placement2) pl.push(2)
+    if (efP1.value) pl.push(1)
+    if (efP2.value) pl.push(2)
     t.entry.placement = pl.length === 2 ? undefined : (pl.length === 0 ? [1] : pl as any)
     regex.save()
   }
@@ -118,7 +125,9 @@ function openBook(target: string) {
     view.value = 'regex'
     return
   }
-  if (target !== 'global') {
+  if (target === 'global') {
+    wbs.initGlobalBook()
+  } else {
     loadingBook.value = true
     wbs.loadForBrowse(target)
     loadingBook.value = false
@@ -326,33 +335,33 @@ const POS_LABELS: Record<string, string> = {
               <template v-if="editTarget.type === 'wb'">
                 <div class="fg">
                   <label>备注 / 标题</label>
-                  <input v-model="editForm.comment" class="fi" placeholder="条目名称..." />
+                  <input v-model="efComment" class="fi" placeholder="条目名称..." />
                 </div>
                 <div class="fg">
                   <label>触发关键词 <span class="l-en">KEYS</span></label>
-                  <input v-model="editForm.keysStr" class="fi" placeholder="逗号分隔，如: 精灵, 森林" />
+                  <input v-model="efKeysStr" class="fi" placeholder="逗号分隔，如: 精灵, 森林" />
                 </div>
                 <div class="fg">
                   <label>注入位置</label>
                   <div class="pos-row">
                     <button v-for="p in (['before','after','at_constant'] as const)" :key="p"
-                      :class="['pos-btn', { on: editForm.position === p }]"
-                      @click="editForm.position = p">{{ POS_LABELS[p] }}</button>
+                      :class="['pos-btn', { on: efPosition === p }]"
+                      @click="efPosition = p">{{ POS_LABELS[p] }}</button>
                   </div>
                 </div>
                 <div class="fg-row">
                   <div class="fg" style="flex:1">
-                    <label>优先级 {{ editForm.priority }}</label>
-                    <input v-model.number="editForm.priority" type="range" min="0" max="100" style="width:100%;accent-color:var(--theme-text-accent)" />
+                    <label>优先级 {{ efPriority }}</label>
+                    <input v-model.number="efPriority" type="range" min="0" max="100" style="width:100%;accent-color:var(--theme-text-accent)" />
                   </div>
                   <div class="fg" style="flex:0 0 70px;display:flex;align-items:center;gap:6px;padding-top:18px">
-                    <ToggleSwitch :modelValue="editForm.enabled" @update:modelValue="editForm.enabled = $event" />
+                    <ToggleSwitch :modelValue="efEnabled" @update:modelValue="efEnabled = $event" />
                     <span style="font-size:11px;color:var(--theme-text-main)">启用</span>
                   </div>
                 </div>
                 <div class="fg">
                   <label>正文内容</label>
-                  <textarea v-model="editForm.content" class="fi fi-ta" rows="10" placeholder="注入到 prompt 的背景文本..." style="font-family:monospace;font-size:12px"></textarea>
+                  <textarea v-model="efContent" class="fi fi-ta" rows="10" placeholder="注入到 prompt 的背景文本..." style="font-family:monospace;font-size:12px"></textarea>
                 </div>
               </template>
 
@@ -360,21 +369,21 @@ const POS_LABELS: Record<string, string> = {
               <template v-if="editTarget.type === 'regex'">
                 <div class="fg">
                   <label>规则名称</label>
-                  <input v-model="editForm.scriptName" class="fi" placeholder="例如：去除 [动作] 标记" />
+                  <input v-model="efScriptName" class="fi" placeholder="例如：去除 [动作] 标记" />
                 </div>
                 <div class="fg">
                   <label>查找正则 <span class="l-en">FIND</span></label>
-                  <textarea v-model="editForm.findRegex" class="fi fi-ta" rows="3" placeholder="/pattern/flags" style="font-family:monospace;font-size:12px"></textarea>
+                  <textarea v-model="efFindRegex" class="fi fi-ta" rows="3" placeholder="/pattern/flags" style="font-family:monospace;font-size:12px"></textarea>
                 </div>
                 <div class="fg">
                   <label>替换为 <span class="l-en">REPLACE</span></label>
-                  <textarea v-model="editForm.replaceString" class="fi fi-ta" rows="3" placeholder="替换内容，可用 $1 引用捕获组" style="font-family:monospace;font-size:12px"></textarea>
+                  <textarea v-model="efReplaceString" class="fi fi-ta" rows="3" placeholder="替换内容，可用 $1 引用捕获组" style="font-family:monospace;font-size:12px"></textarea>
                 </div>
                 <div class="fg-row" style="align-items:center">
                   <label style="margin-bottom:0;white-space:nowrap">执行时机</label>
-                  <label class="chk-lbl"><input type="checkbox" v-model="editForm.placement1" /> 发送前</label>
-                  <label class="chk-lbl"><input type="checkbox" v-model="editForm.placement2" /> 显示前</label>
-                  <ToggleSwitch style="margin-left:auto" :modelValue="!editForm.disabled" @update:modelValue="editForm.disabled = !$event" />
+                  <label class="chk-lbl"><input type="checkbox" v-model="efP1" /> 发送前</label>
+                  <label class="chk-lbl"><input type="checkbox" v-model="efP2" /> 显示前</label>
+                  <ToggleSwitch style="margin-left:auto" :modelValue="!efDisabled" @update:modelValue="efDisabled = !$event" />
                   <span style="font-size:11px;color:var(--theme-text-main)">启用</span>
                 </div>
               </template>
