@@ -8,6 +8,14 @@ import { useGameStore } from '@/stores/gameStore'
 import { useExtensionStore } from '@/stores/extensionStore'
 import { loadAllEnabled } from '@/utils/extensionEngine'
 import { bus } from '@/utils/events'
+import { storage } from '@/utils/storage'
+
+// 暴露到 window 方便调试存储问题
+;(window as any).__wandouStorage = {
+  list: () => { console.table(storage.listKeys()) },
+  clear: () => { const n = storage.clearAll(); console.log(`已清除 ${n} 条 wandou 存储数据，刷新页面生效`); return n },
+  dump: (key: string) => { const v = localStorage.getItem(key); try { return JSON.parse(v!) } catch { return v } },
+}
 
 function bootstrap() {
   try {

@@ -1,5 +1,5 @@
 // ============================================================
-// wandou v0.7 — 豌豆星际漂流 · NPC 角色书引擎
+// wandou v0.7 — 豌豆 · NPC 角色书引擎
 // 自有格式 + SillyTavern 角色卡兼容导入 + 关键词匹配
 // ============================================================
 
@@ -22,7 +22,12 @@ export function scanNpcs(
   const matched: NpcEntry[] = []
 
   for (const npc of enabled) {
-    for (const key of npc.keys) {
+    // 合并所有可匹配的关键词：keys + aliases
+    const allKeys = [...new Set([
+      ...npc.keys,
+      ...(npc.aliases || []),
+    ])]
+    for (const key of allKeys) {
       if (!key.trim()) continue
       if (historyText.includes(key.toLowerCase().trim())) {
         matched.push(npc)
@@ -53,6 +58,8 @@ export function scanNpcs(
 function formatNpcCard(npc: NpcEntry): string {
   const lines: string[] = []
   lines.push(`「${npc.name}」(${npc.role})`)
+  if (npc.aliases && npc.aliases.length > 0) lines.push(`别名/曾用名: ${npc.aliases.join(', ')}`)
+  if (npc.identityRevealed) lines.push(`⚠️ 身份已揭示（原名可能是占位名）`)
   if (npc.personality) lines.push(`性格: ${npc.personality}`)
   if (npc.appearance) lines.push(`外貌: ${npc.appearance}`)
   if (npc.background) lines.push(`背景: ${npc.background}`)
@@ -115,6 +122,16 @@ export function importNpcJson(jsonStr: string): NpcImportResult {
       firstMessage: (src.first_mes || src.firstMessage || '').trim(),
       enabled: raw.enabled !== false,
       priority: typeof raw.priority === 'number' ? Math.max(0, Math.min(100, raw.priority)) : 50,
+    }
+
+    // ---- 自动推导人物分类（yijiekkk-style） ----
+    const allTagText = [...entry.keys, ...(Array.isArray(src.tags) ? src.tags : [])].join(' ')
+    if (/重点|关键角色|核心|重要NPC|主要角色/i.test(allTagText)) {
+      entry.人物分类 = '重点'
+    } else if (/离场|退场|离场NPC|已离开/i.test(allTagText)) {
+      entry.人物分类 = '离场'
+    } else {
+      entry.人物分类 = '在场'
     }
 
     // ST: description 拆到 personality/appearance

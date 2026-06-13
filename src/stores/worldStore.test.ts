@@ -19,10 +19,10 @@ describe('worldStore', () => {
 
   it('createWorld 添加新世界并设为 current', async () => {
     const ws = useWorldStore()
-    const id = await ws.createWorld('星际站', '一个空间站')
+    const id = await ws.createWorld('边境站', '一个边境补给站')
     expect(ws.worldList.length).toBe(1)
     expect(ws.currentWorldId).toBe(id)
-    expect(ws.worldName).toBe('星际站')
+    expect(ws.worldName).toBe('边境站')
   })
 
   it('deleteWorld 移除并持久化', async () => {

@@ -7,7 +7,7 @@
  */
 export function buildMemoryExtractPrompt(): string {
   return [
-    `你是星际冒险游戏的长期记忆整理器。`,
+    `你是奇幻冒险游戏的长期记忆整理器。`,
     `请从剧情中提取对后续故事可能有长期影响的关键事实。`,
     ``,
     `【12 类主分类】`,

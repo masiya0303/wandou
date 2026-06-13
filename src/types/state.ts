@@ -2,9 +2,8 @@
 // wandou · 状态同步系统类型
 // ============================================================
 
-/** 世界时间格式：如 "星历 0001年 01月 01日 08:00" */
+/** 世界时间格式：如 "2157年 01月 01日 08:00" */
 export interface WorldTime {
-  era: string       // "星历" / "公元" etc
   year: number
   month: number
   day: number
@@ -14,7 +13,7 @@ export interface WorldTime {
 
 /** 地点 */
 export interface GameLocation {
-  region: string    // 主区域（如 "近地轨道空间站"）
+  region: string    // 主区域（如 "边境集市"）
   subRegion: string // 子区域（如 "商业区"）
   detail: string    // 详细位置（如 "星光酒馆"）
 }
@@ -57,6 +56,24 @@ export interface NpcRelation {
   favorability: number   // -99 ~ 99
   status: string         // "友好" / "中立" / "敌视" 等
   lastInteraction: string // 世界时间
+}
+
+// ============================================================
+// 统一状态树（yijiekkk-style — 所有变量操作的目标）
+// ============================================================
+
+/** 统一变量状态树 — 通用 RFC 6902 Patch 操作的目标 */
+export interface UnifiedVariableState {
+  player: Record<string, any>
+  npcs: Record<string, Record<string, any>>
+  time: string
+  location: GameLocation
+  state: {
+    天气: string
+    世界大事: any[]
+    [key: string]: any
+  }
+  [key: string]: any
 }
 
 // ============================================================

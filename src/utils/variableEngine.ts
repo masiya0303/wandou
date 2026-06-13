@@ -1,21 +1,34 @@
 // ============================================================
-// wandou · 增强变量引擎
+// wandou · 统一变量引擎
 //
-// 从 AI 回复中提取 <variables> / <mj_variables> / <patch> 标签，
-// 解析为 RFC 6902 JSON Patch 操作，应用到 playerStore / npcStore
+// 从 AI 回复中提取 <mj_variables> JSON Patch，
+// 校验、路由并应用到各 Store（player / world / npc）。
 //
-// 增强点：
-//   - 统一的多层标签提取（5 级回退）
-//   - 支持中英文字段名双向兼容
-//   - NPC 模糊匹配（name / id）
-//   - 增量表达式 ("+N", "-N")
-//   - 物品操作通过 playerStore.applyOps() 统一入口
+// 变量定义见 variableRegistry.ts — 本文件只做解析 + 路由。
 // ============================================================
 
 import type { InventoryItem, Quest } from '@/types/world'
 import { usePlayerStore } from '@/stores/playerStore'
 import { useNpcStore } from '@/stores/npcStore'
-import { safeParseJson, extractBalancedJson } from './jsonExtract'
+import { useStateStore } from '@/stores/stateStore'
+import { safeParseJson, extractBalancedJson, tryRepairTruncatedJson } from './jsonExtract'
+import {
+  resolveVarDef,
+  validateValue,
+  type VarDef,
+} from './variableRegistry'
+
+/** 是否使用统一状态树路径（新架构）来应用变量操作 */
+let _useUnifiedPatch = false
+
+/** 切换变量应用模式。true=统一状态树+递归Patch, false=逐Store路由（默认） */
+export function setUseUnifiedPatch(flag: boolean) {
+  _useUnifiedPatch = flag
+}
+
+// ============================================================
+// 公共类型
+// ============================================================
 
 export interface VarOperation {
   op: 'add' | 'replace' | 'remove'
@@ -29,6 +42,10 @@ export interface VarResult {
   summary: string
   operations: { op: VarOperation; result: string | null }[]
 }
+
+// ============================================================
+// 提取链（5 级回退）
+// ============================================================
 
 export function extractAllJsonPayloads(text: string): string[] {
   const results: string[] = []
@@ -59,12 +76,10 @@ export function extractAllJsonPayloads(text: string): string[] {
   const fenceRe = /```(?:json|javascript|js)?\s*([\s\S]*?)\s*```/gi
   while ((m = fenceRe.exec(text)) !== null) {
     const content = m[1].trim()
-    // 只取看起来像操作数组或路径映射的
-    if (content.startsWith('[') || content.startsWith('{') && (content.includes('"op"') || content.includes('"path"') || content.includes('"player"'))) {
+    if (content.startsWith('[') || (content.startsWith('{') && (content.includes('"op"') || content.includes('"path"') || content.includes('"player"')))) {
       fences.push(content)
     }
   }
-  // 从后往前取（最新的优先）
   results.push(...fences.reverse())
 
   // 5. 裸 JSON 平衡提取
@@ -77,7 +92,7 @@ export function extractAllJsonPayloads(text: string): string[] {
 }
 
 // ============================================================
-// 解析为 VarOperation[]
+// 解析 JSON Patch
 // ============================================================
 
 export function parseOperations(raw: string): VarOperation[] {
@@ -86,19 +101,35 @@ export function parseOperations(raw: string): VarOperation[] {
   const trimmed = raw.trim()
   if (!trimmed) return ops
 
-  // 尝试 JSON 解析
   let data: any = safeParseJson(trimmed)
+  let wasTruncated = false
+
   if (data === null) {
     data = safeParseJson(trimmed.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, ''))
   }
 
   if (data === null) {
-    // 松散格式回退：/path/to/field = value
+    // 尝试截断修复
+    data = tryRepairTruncatedJson(trimmed)
+    if (data !== null) {
+      wasTruncated = true
+      console.warn('[wandou] ⚠️ JSON Patch 被截断（可能 max_tokens 不足），已尝试修复并恢复部分操作')
+    }
+  }
+
+  if (data === null) {
+    return parseLooseOperations(raw)
+  }
+
+  if (wasTruncated && Array.isArray(data)) {
+    console.warn('[wandou] ⚠️ 截断修复：原始 ' + trimmed.length + ' 字符，恢复了 ' + data.length + ' 个操作（可能丢失了最后几个）')
+  }
+
+  if (data === null) {
     return parseLooseOperations(raw)
   }
 
   if (Array.isArray(data)) {
-    // RFC 6902 数组
     for (const item of data) {
       if (!item || typeof item !== 'object') continue
       const op = String(item.op ?? '').toLowerCase()
@@ -141,7 +172,6 @@ export function parseOperations(raw: string): VarOperation[] {
             ops.push({ op: 'replace', path: `/player/attributes/${k}`, value: v })
           }
         }
-        // character fields
         const charFields = ['name', 'age', 'background', 'gender', '姓名', '年龄', '背景', '性别']
         for (const f of charFields) {
           if (data.player[f] !== undefined) {
@@ -164,7 +194,6 @@ export function parseOperations(raw: string): VarOperation[] {
   return ops
 }
 
-/** 松散格式：/player/gold = 150 或 $.player.gold: 150 */
 function parseLooseOperations(raw: string): VarOperation[] {
   const ops: VarOperation[] = []
   const lines = raw.split(/\r?\n/)
@@ -173,7 +202,6 @@ function parseLooseOperations(raw: string): VarOperation[] {
     const trimmed = line.replace(/^[-*]\s+/, '').trim()
     if (!trimmed || trimmed.startsWith('```') || trimmed.startsWith('<')) continue
 
-    // 匹配: path = value 或 path: value 或 path => value
     const m = /^(\/[^\s=:]+|[$\.][^\s=:]+|[a-zA-Z_][\w\/\.]*)\s*[:=]\s*(.+)$/i.exec(trimmed)
       || /^(\/[^\s=:]+|[$\.][^\s=:]+)\s*=>\s*(.+)$/i.exec(trimmed)
     if (!m) continue
@@ -186,7 +214,6 @@ function parseLooseOperations(raw: string): VarOperation[] {
     if (!rawVal) continue
 
     let value: any = rawVal
-    // 解析值
     if (/^(true|false|null)$/i.test(rawVal)) {
       value = rawVal.toLowerCase() === 'true' ? true : rawVal.toLowerCase() === 'false' ? false : null
     } else if (/^-?\d+(\.\d+)?$/.test(rawVal)) {
@@ -211,25 +238,17 @@ function normalizeVariablePath(raw: string): string {
   let path = String(raw || '').trim()
   if (!path) return ''
 
-  // $ 前缀 → 去 $
   if (path.startsWith('$')) {
     path = path.slice(1)
     if (path.startsWith('.')) path = path.slice(1)
   }
-
-  // 点分路径 → 斜杠路径
   if (path.includes('.') && !path.startsWith('/')) {
     path = '/' + path.replace(/\./g, '/')
   }
-
   if (!path.startsWith('/')) {
     path = '/' + path
   }
-
-  // 去掉尾部斜杠
-  path = path.replace(/\/+$/, '')
-
-  return path
+  return path.replace(/\/+$/, '')
 }
 
 // ============================================================
@@ -248,55 +267,95 @@ export function resolveIncremental(current: number, raw: any): number {
 }
 
 // ============================================================
-// 应用单条操作
+// 类型规范化
+// ============================================================
+
+// 注意：此函数与 playerStore.normalizeType 保持同步。
+// 实际物品写入统一走 playerStore.applyOps()，那里的 normalizeType 是唯一生效的。
+// 此导出仅为外部调用者提供便捷的类型推断。
+export function normalizeItemType(raw: string): InventoryItem['type'] {
+  const t = String(raw || '').toLowerCase()
+  if (t.includes('武器') || t.includes('weapon') || t.includes('兵器') ||
+      t.includes('装备') || t.includes('equipment')) return 'weapon'
+  if (t.includes('防具') || t.includes('铠甲') || t.includes('armor') || t.includes('盔甲') ||
+      t.includes('头盔') || t.includes('盾') || t.includes('护甲') || t.includes('披风') ||
+      t.includes('helmet') || t.includes('shield')) return 'armor'
+  if (t.includes('消耗') || t.includes('药') || t.includes('consumable') || t.includes('potion') ||
+      t.includes('食物') || t.includes('food') || t.includes('卷轴') || t.includes('scroll')) return 'consumable'
+  if (t.includes('材料') || t.includes('material') || t.includes('零件') || t.includes('矿石') ||
+      t.includes('component') || t.includes('资源') || t.includes('布料') || t.includes('木材') ||
+      t.includes('herb') || t.includes('ore') || t.includes('gem') || t.includes('crystal')) return 'material'
+  if (t.includes('关键') || t.includes('key') || t.includes('钥匙') || t.includes('通行证') ||
+      t.includes('令牌') || t.includes('信物') || t.includes('地图') || t.includes('map')) return 'key'
+  return 'other'
+}
+
+// ============================================================
+// 操作路由
 // ============================================================
 
 export function applyOperation(op: VarOperation): string | null {
-  const player = usePlayerStore()
-  const npc = useNpcStore()
+  const origPath = normalizeVariablePath(op.path)
+  if (!origPath) return null
 
-  const path = normalizeVariablePath(op.path)
-  if (!path) return null
-
-  const parts = path.split('/').filter(Boolean)
-  if (parts.length === 0) return null
-
-  // === /player/... ===
-  if (parts[0] === 'player') {
-    return applyPlayerPath(op, parts.slice(1), player)
+  const resolved = resolveVarDef(origPath)
+  if (!resolved) {
+    console.warn('[wandou] 变量路径未注册，跳过:', origPath)
+    return null
   }
 
-  // === /npcs/... ===
-  if (parts[0] === 'npcs') {
-    return applyNpcPath(op, parts.slice(1), npc)
+  const { def, dynamicName, canonicalPath } = resolved
+
+  // 使用规范化后的路径进行路由（处理过中文→英文别名）
+  const routePath = canonicalPath || origPath
+
+  // 校验值
+  if (op.value !== undefined) {
+    const validation = validateValue(def, op.value)
+    if (!validation.valid) {
+      console.warn('[wandou] 变量值校验失败:', routePath, validation.reason)
+      return null
+    }
+  }
+
+  const parts = routePath.split('/').filter(Boolean)
+  if (parts.length === 0) return null
+
+  // 按顶级路径路由
+  const root = parts[0]
+  if (root === 'player') {
+    return applyPlayerOp(op, parts.slice(1), def, dynamicName)
+  }
+  if (root === 'world') {
+    return applyWorldOp(op, parts.slice(1), def)
+  }
+  if (root === 'npcs') {
+    return applyNpcOp(op, parts.slice(1), def, dynamicName)
   }
 
   return null
 }
 
 // ============================================================
-// Player 路径处理器
+// Player 操作
 // ============================================================
 
-function applyPlayerPath(op: VarOperation, parts: string[], player: ReturnType<typeof usePlayerStore>): string | null {
+function applyPlayerOp(
+  op: VarOperation,
+  parts: string[],
+  def: VarDef,
+  _dynamicName?: string,
+): string | null {
+  const player = usePlayerStore()
   if (parts.length === 0) return null
 
-  const head = parts[0].toLowerCase()
-
-  // /player/inventory/...
-  if (['inventory', '背包', 'items'].includes(head) || head === 'inventory' || head === '背包') {
-    return handleInventoryPath(op, parts.slice(1), player)
-  }
-
-  // /player/quests/...
-  if (['quests', '任务', 'tasks'].includes(head) || head === 'quests' || head === '任务') {
-    return handleQuestPath(op, parts.slice(1), player)
-  }
+  const head = parts[0]
 
   // /player/gold
-  if (['gold', '金币', 'coins', '金钱'].includes(head) || head === 'gold') {
+  if (head === 'gold') {
     const current = player.character.gold ?? 0
-    const newVal = Math.max(0, resolveIncremental(current, op.value))
+    const method = def.incremental ? resolveIncremental : (v: any) => Number(v)
+    const newVal = Math.max(0, method(current, op.value))
     player.updateCharacter({ ...player.character, gold: newVal })
     const diff = newVal - current
     if (diff > 0) return `🪙 金币 +${diff}（当前 ${newVal}）`
@@ -305,31 +364,37 @@ function applyPlayerPath(op: VarOperation, parts: string[], player: ReturnType<t
   }
 
   // /player/attributes/{name}
-  if (['attributes', '属性'].includes(head) || head === 'attributes') {
-    if (parts.length > 1) {
-      const attrName = parts[1]
-      const attrs = { ...(player.character.attributes || {}) }
-      const current = attrs[attrName] ?? 0
-      attrs[attrName] = resolveIncremental(current, op.value)
-      player.updateCharacter({ ...player.character, attributes: attrs })
-      return `✨ ${attrName}: ${attrs[attrName]}`
-    }
+  if (head === 'attributes' && parts.length > 1) {
+    const attrName = parts[1]
+    const attrs = { ...(player.character.attributes || {}) }
+    const current = attrs[attrName] ?? 0
+    attrs[attrName] = def.incremental ? resolveIncremental(current, op.value) : Number(op.value)
+    player.updateCharacter({ ...player.character, attributes: attrs })
+    return `✨ ${attrName}: ${attrs[attrName]}`
   }
 
   // /player/character/{field}
-  if (['character', '角色'].includes(head) || head === 'character') {
-    if (parts.length > 1) {
-      const update: any = {}
-      update[parts[1]] = op.value
-      player.updateCharacter(update)
-      return null // 角色字段变更不弹提醒
-    }
+  if (head === 'character' && parts.length > 1) {
+    const update: any = {}
+    update[parts[1]] = op.value
+    player.updateCharacter(update)
+    return null
   }
 
-  // /player/{field} 直接字段
-  if (parts.length === 1) {
+  // /player/inventory
+  if (head === 'inventory') {
+    return handleInventoryOp(op, parts.slice(1), player)
+  }
+
+  // /player/quests
+  if (head === 'quests') {
+    return handleQuestOp(op, parts.slice(1), player)
+  }
+
+  // 直接字段
+  if (parts.length === 1 && head !== 'attributes' && head !== 'inventory' && head !== 'quests') {
     const update: any = {}
-    update[parts[0]] = op.value
+    update[head] = op.value
     player.updateCharacter(update)
     return null
   }
@@ -338,13 +403,17 @@ function applyPlayerPath(op: VarOperation, parts: string[], player: ReturnType<t
 }
 
 // ============================================================
-// 物品路径处理器 — 通过 playerStore.applyOps() 统一入口
+// 物品操作
 // ============================================================
 
-function handleInventoryPath(op: VarOperation, parts: string[], player: ReturnType<typeof usePlayerStore>): string | null {
+function handleInventoryOp(
+  op: VarOperation,
+  parts: string[],
+  player: ReturnType<typeof usePlayerStore>,
+): string | null {
+  // add 新物品: /player/inventory/-
   if (op.op === 'add' || (op.op === 'replace' && parts[0] === '-')) {
     if (op.value && Array.isArray(op.value)) {
-      // 批量添加 → 通过统一入口
       const ops = op.value
         .filter((v: any) => v && typeof v === 'object')
         .map((v: any) => ({
@@ -376,15 +445,16 @@ function handleInventoryPath(op: VarOperation, parts: string[], player: ReturnTy
         return `📦 获得 ${itemName}${qty > 1 ? ` ×${qty}` : ''}`
       }
     }
-
     return null
   }
 
+  // update 物品数量或属性: /player/inventory/{name}
   if (op.op === 'replace' && parts.length > 0 && parts[0] !== '-') {
     const identifier = parts[0]
     return handleInventoryUpdate(identifier, op.value, player)
   }
 
+  // remove 物品: /player/inventory/{name}
   if (op.op === 'remove' && parts.length > 0) {
     const identifier = parts[0]
     return handleInventoryRemove(identifier, player)
@@ -393,14 +463,17 @@ function handleInventoryPath(op: VarOperation, parts: string[], player: ReturnTy
   return null
 }
 
-function handleInventoryUpdate(identifier: string, value: any, player: ReturnType<typeof usePlayerStore>): string | null {
+function handleInventoryUpdate(
+  identifier: string,
+  value: any,
+  player: ReturnType<typeof usePlayerStore>,
+): string | null {
   if (!value) return null
-
   const items = player.inventory
 
   // 按索引
   const idx = Number(identifier)
-  if (!isNaN(idx) && idx < items.length) {
+  if (!isNaN(idx) && idx >= 0 && idx < items.length) {
     if (value.quantity !== undefined) {
       const newQty = resolveIncremental(items[idx].quantity, value.quantity)
       player.updateItemQuantity(items[idx].id, newQty)
@@ -419,12 +492,15 @@ function handleInventoryUpdate(identifier: string, value: any, player: ReturnTyp
   return null
 }
 
-function handleInventoryRemove(identifier: string, player: ReturnType<typeof usePlayerStore>): string | null {
+function handleInventoryRemove(
+  identifier: string,
+  player: ReturnType<typeof usePlayerStore>,
+): string | null {
   const items = player.inventory
 
   // 按索引
   const idx = Number(identifier)
-  if (!isNaN(idx) && idx < items.length) {
+  if (!isNaN(idx) && idx >= 0 && idx < items.length) {
     const removed = items[idx]
     player.removeItem(removed.id)
     return `🗑️ 失去 ${removed.name}`
@@ -440,33 +516,123 @@ function handleInventoryRemove(identifier: string, player: ReturnType<typeof use
   return null
 }
 
-function handleQuestPath(op: VarOperation, parts: string[], player: ReturnType<typeof usePlayerStore>): string | null {
-  // add quest
-  if ((op.op === 'add' || (op.op === 'replace' && parts[0] === '-')) && op.value && typeof op.value === 'object' && !Array.isArray(op.value)) {
-    const q: Quest = {
-      id: op.value.id || `q-${Date.now()}`,
-      title: op.value.title || op.value.标题 || op.value.name || '新任务',
-      description: op.value.description || op.value.描述 || op.value.content || '',
-      status: 'active',
-      objectives: Array.isArray(op.value.objectives) ? op.value.objectives : [],
+// ============================================================
+// 任务操作（统一通过 JSON Patch）
+// ============================================================
+
+// ============================================================
+// 从 AI 输出的 value 构建 Quest（5字段齐全）
+// ============================================================
+function buildQuestFromValue(v: any): Quest {
+  const questType = String(v.questType || v.任务类型 || v.type || '支线').trim()
+  const color = String(v.color || v.任务颜色 || v.colour || defaultQuestColor(questType)).trim()
+  return {
+    id: v.id || `q-${Date.now()}`,
+    title: (v.title || v.标题 || v.name || '新任务').toString().trim(),
+    questType,
+    description: (v.description || v.描述 || v.content || '').toString().trim(),
+    reward: (v.reward || v.奖励 || v.任务奖励 || '').toString().trim(),
+    color,
+    status: (v.status || 'active').toString().trim() as any,
+    objectives: Array.isArray(v.objectives) ? v.objectives : [],
+    source: (v.source || v.来源 || v.发布者 || '').toString().trim() || undefined,
+    sourceNpcId: (v.sourceNpcId || v.发布者ID || '').toString().trim() || undefined,
+    acceptedAt: (v.acceptedAt || v.接取时间 || '').toString().trim() || undefined,
+  }
+}
+
+function defaultQuestColor(questType: string): string {
+  switch (questType) {
+    case '主线': return '#ff6b6b'
+    case '支线': return '#ffa726'
+    case '日常': return '#66bb6a'
+    case '紧急': return '#e53935'
+    case '隐藏': return '#9575cd'
+    default: return '#ffa726'
+  }
+}
+
+function handleQuestOp(
+  op: VarOperation,
+  parts: string[],
+  player: ReturnType<typeof usePlayerStore>,
+): string | null {
+  const questValue: any = op.value
+
+  // ---- add 新任务: /player/quests/- ----
+  if ((op.op === 'add' || (op.op === 'replace' && parts[0] === '-')) &&
+      questValue && typeof questValue === 'object' && !Array.isArray(questValue)) {
+    const q = buildQuestFromValue(questValue)
+    const existing = player.quests.find(x => x.title === q.title || x.id === q.id)
+    if (existing) {
+      if (questValue.status) player.updateQuestStatus(existing.id, questValue.status as any)
+      if (questValue.description) existing.description = questValue.description
+      return null
     }
     player.addQuest(q)
+    console.warn('[wandou] 任务已添加 (/-):', q.title, 'type=', q.questType)
     return `📋 新任务：${q.title}`
   }
 
-  // update quest
-  if (op.op === 'replace' && parts.length > 0 && parts[0] !== '-') {
-    const quests = player.quests
-    const byName = quests.find(q => q.id === parts[0] || q.title === parts[0])
-    if (byName && op.value && typeof op.value === 'object') {
-      if (op.value.status) {
-        player.updateQuestStatus(byName.id, op.value.status as any)
-        if (op.value.status === 'completed') return `✅ 任务完成：${byName.title}`
-        if (op.value.status === 'failed') return `❌ 任务失败：${byName.title}`
-      }
-      if (op.value.title) byName.title = op.value.title
-      if (op.value.description) byName.description = op.value.description
+  // ---- add 新任务: /player/quests（AI 遗漏了 /-） ----
+  if (parts.length === 0 &&
+      (op.op === 'add' || op.op === 'replace') &&
+      questValue && typeof questValue === 'object' && !Array.isArray(questValue)) {
+    const q = buildQuestFromValue(questValue)
+    if (!q.title || q.title === '新任务') return null
+    const existing = player.quests.find(x => x.title === q.title || x.id === q.id)
+    if (existing) {
+      if (questValue.status) player.updateQuestStatus(existing.id, questValue.status as any)
+      if (questValue.description) existing.description = questValue.description
       return null
+    }
+    player.addQuest(q)
+    console.warn('[wandou] 任务已添加 (/quests):', q.title, 'type=', q.questType)
+    return `📋 新任务：${q.title}`
+  }
+
+  // ---- add 批量任务: /player/quests 替换整个数组 ----
+  if (parts.length === 0 && op.op === 'replace' && Array.isArray(questValue)) {
+    const titles: string[] = []
+    for (const item of questValue) {
+      if (!item || typeof item !== 'object') continue
+      const q = buildQuestFromValue(item)
+      if (!q.title || q.title === '新任务') continue
+      if (player.quests.some(x => x.title === q.title)) continue
+      player.addQuest(q)
+      titles.push(q.title)
+    }
+    if (titles.length > 0) {
+      console.warn('[wandou] 批量任务已添加:', titles.join('、'))
+      return `📋 新任务：${titles.join('、')}`
+    }
+    return null
+  }
+
+  // ---- update 任务状态 或 按名称 upsert: /player/quests/{title} ----
+  if ((op.op === 'replace' || op.op === 'add') && parts.length > 0 && parts[0] !== '-') {
+    const quests = player.quests
+    const targetTitle = parts[0].trim()
+    const byName = quests.find(q => q.id === targetTitle || q.title === targetTitle)
+
+    if (byName && questValue && typeof questValue === 'object') {
+      if (questValue.status) {
+        const status = questValue.status
+        player.updateQuestStatus(byName.id, status as any)
+        if (status === 'completed') return `✅ 任务完成：${byName.title}`
+        if (status === 'failed') return `❌ 任务失败：${byName.title}`
+      }
+      if (questValue.title) byName.title = questValue.title
+      if (questValue.description) byName.description = questValue.description
+      return null
+    }
+
+    // upsert: 未找到 → 创建新任务
+    if (!byName && questValue && typeof questValue === 'object') {
+      const q = buildQuestFromValue({ ...questValue, title: questValue.title || targetTitle })
+      player.addQuest(q)
+      console.warn('[wandou] 任务已添加 (upsert):', q.title, 'type=', q.questType)
+      return `📋 新任务：${q.title}`
     }
   }
 
@@ -474,33 +640,223 @@ function handleQuestPath(op: VarOperation, parts: string[], player: ReturnType<t
 }
 
 // ============================================================
-// NPC 路径处理器
+// World 操作
 // ============================================================
 
-function applyNpcPath(op: VarOperation, parts: string[], npc: ReturnType<typeof useNpcStore>): string | null {
-  if (parts.length < 2) return null
+function applyWorldOp(
+  op: VarOperation,
+  parts: string[],
+  _def: VarDef,
+): string | null {
+  const store = useStateStore()
+  if (parts.length === 0) return null
 
-  const npcName = parts[0]
-  // 模糊匹配：先按 name 匹配，再按 id 匹配
-  const target = npc.npcs.find(n =>
-    n.name === npcName ||
-    n.id === npcName ||
-    n.name.toLowerCase() === npcName.toLowerCase()
-  )
-  if (!target) return null
+  const head = parts[0]
 
-  const field = parts[1].toLowerCase()
+  // /world/time
+  if (head === 'time') {
+    if (typeof op.value === 'string') {
+      const r = store.setWorldTime(op.value)
+      if (r.ok) return `⏰ ${op.value}`
+      console.debug('[wandou] 时间更新失败:', r.reason)
+    }
+    return null
+  }
 
-  // favor / 好感
-  if (['favor', 'favorability', '好感', '好感度'].includes(field)) {
+  // /world/location/...
+  if (head === 'location' && parts.length > 1) {
+    const loc: any = {}
+    if (parts[1] === 'region') loc.region = String(op.value)
+    else if (parts[1] === 'subRegion') loc.subRegion = String(op.value)
+    else if (parts[1] === 'detail') loc.detail = String(op.value)
+    if (Object.keys(loc).length > 0) {
+      store.setLocation(loc)
+      return null // location change already emitted by stateStore
+    }
+    return null
+  }
+
+  // /world/weather
+  if (head === 'weather') {
+    store.setWeather(String(op.value))
+    return null
+  }
+
+  return null
+}
+
+// ============================================================
+// NPC 操作
+// ============================================================
+
+function applyNpcOp(
+  op: VarOperation,
+  parts: string[],
+  def: VarDef,
+  npcName?: string,
+): string | null {
+  const npc = useNpcStore()
+
+  // add 新 NPC: /npcs/-
+  if ((op.op === 'add' || (op.op === 'replace' && parts[0] === '-')) && op.value && typeof op.value === 'object' && !Array.isArray(op.value)) {
+    const v = op.value
+    const name = (v.name || v.名称 || '').trim()
+    if (!name) return null
+    // 同名 NPC 已存在 → 不重复添加
+    if (npc.npcs.some(n => n.name === name || n.id === name)) {
+      console.debug('[wandou] NPC 已存在，跳过添加:', name)
+      return null
+    }
+    const entry: NpcEntry = {
+      id: `npc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      name,
+      keys: [name],
+      role: String(v.role || v.身份 || v.职业 || ''),
+      personality: String(v.personality || v.性格 || ''),
+      appearance: String(v.appearance || v.外貌 || ''),
+      background: String(v.background || v.背景 || ''),
+      relationToPlayer: String(v.relationToPlayer || v.与玩家关系 || ''),
+      speechStyle: '',
+      scenario: '',
+      firstMessage: '',
+      enabled: true,
+      priority: 10,
+      // 通用人口学字段
+      age: (() => { const n = Number(v.age ?? v.年龄); return n > 0 ? n : undefined })(),
+      gender: String(v.gender ?? v.性别 ?? ''),
+      characterIntro: String(v.characterIntro ?? v.人物介绍 ?? v.intro ?? ''),
+      sexualExperience: String(v.sexualExperience ?? v.性经历 ?? ''),
+      // 世界特定属性
+      extraAttributes: v.extraAttributes && typeof v.extraAttributes === 'object'
+        ? Object.fromEntries(Object.entries(v.extraAttributes as Record<string, unknown>).map(([k, v]) => [k, String(v ?? '')]))
+        : undefined,
+    }
+    npc.addEntries([entry])
+    return `👤 ${name} 登场（ID: ${entry.id}）`
+  }
+
+  if (parts.length < 2 || !npcName) return null
+
+  const field = parts[1]
+
+  // 模糊匹配 NPC（使用 npcStore 的 findNpc，支持 aliases + nameHistory）
+  const target = npc.findNpc(npcName)
+
+  if (!target) {
+    console.warn('[wandou] ⚠️ NPC 未找到，变量操作跳过:', npcName, '→ 路径:', op.path, '| 在场NPC:', npc.npcs.filter(n => n.enabled).map(n => n.name).join(', '))
+    return null
+  }
+
+  // ---- identity 批量身份揭示 ----
+  if (field === 'identity' && op.value && typeof op.value === 'object') {
+    const v = op.value
+    const updates: string[] = []
+
+    // 先改名（如果提供了新名字且不同于当前名）
+    if (typeof v.name === 'string' && v.name.trim() && v.name.trim() !== target.name) {
+      const renameResult = npc.renameNpc(target.id, v.name.trim())
+      if (renameResult) {
+        if (renameResult.isIdentityReveal) {
+          updates.push(`🪪 身份揭示：${renameResult.oldName} → ${renameResult.newName}`)
+        } else {
+          updates.push(`📝 ${renameResult.oldName} → ${renameResult.newName}`)
+        }
+      }
+    }
+
+    // 批量更新其他字段
+    const fields: Array<{ key: string; label: string }> = [
+      { key: 'role', label: '身份' },
+      { key: 'personality', label: '性格' },
+      { key: 'appearance', label: '外貌' },
+      { key: 'background', label: '背景' },
+      { key: 'relationToPlayer', label: '关系' },
+      { key: 'age', label: '年龄' },
+      { key: 'gender', label: '性别' },
+      { key: 'characterIntro', label: '人物介绍' },
+      { key: 'sexualExperience', label: '性经历' },
+    ]
+    for (const { key } of fields) {
+      if (typeof v[key] === 'string' && v[key].trim()) {
+        ;(target as Record<string, unknown>)[key] = v[key].trim()
+        updates.push(`${key}: ${v[key].trim().slice(0, 30)}`)
+      }
+    }
+
+    // 也处理中文别名
+    const aliasMap: Record<string, string> = {
+      '身份': 'role', '职业': 'role',
+      '性格': 'personality',
+      '外貌': 'appearance',
+      '背景': 'background',
+      '与玩家关系': 'relationToPlayer', '关系': 'relationToPlayer',
+      '年龄': 'age',
+      '性别': 'gender',
+      '人物介绍': 'characterIntro',
+      '性经历': 'sexualExperience',
+    }
+    for (const [ck, ek] of Object.entries(aliasMap)) {
+      if (typeof v[ck] === 'string' && v[ck].trim()) {
+        ;(target as Record<string, unknown>)[ek] = v[ck].trim()
+      }
+    }
+
+    // 更新世界特定属性（extraAttributes）
+    if (v.extraAttributes && typeof v.extraAttributes === 'object' && !Array.isArray(v.extraAttributes)) {
+      if (!target.extraAttributes) target.extraAttributes = {}
+      for (const [k, val] of Object.entries(v.extraAttributes as Record<string, unknown>)) {
+        if (typeof val === 'string' && val.trim()) {
+          target.extraAttributes[k] = val.trim()
+          updates.push(`extra.${k}: ${val.trim().slice(0, 20)}`)
+        }
+      }
+    }
+
+    return updates.length > 0 ? updates.join(' | ') : null
+  }
+
+  // favor / 好感度（使用 npcStore.updateFavor 自动记录事迹）
+  if (field === 'favor' || field === 'favorability') {
     const current = target.favor ?? target.favorability ?? 0
-    const newVal = Math.max(-99, Math.min(99, resolveIncremental(current, op.value)))
-    target.favor = newVal
-    target.favorability = newVal
-    const diff = newVal - current
+    const newVal = def.incremental
+      ? resolveIncremental(current, op.value)
+      : Number(op.value)
+    const clamped = Math.max(def.min ?? -99, Math.min(def.max ?? 99, newVal))
+    const result = npc.updateFavor(target.id, clamped)
+    if (!result) return null
+    const diff = clamped - current
     if (diff > 0) return `❤️ ${target.name} 好感 +${diff}`
     if (diff < 0) return `💔 ${target.name} 好感 ${diff}`
     return null
+  }
+
+  // enabled / isVisible（使用 setCategory 自动记录事迹）
+  if (field === 'enabled' || field === 'isVisible') {
+    const val = op.value === 'true' || op.value === true || op.value === 1 ? true : false
+    npc.setCategory(target.id, val ? '在场' : '离场')
+    return val ? null : `${target.name} 已离场`
+  }
+
+  // currentHp
+  if (field === 'currentHp') {
+    const current = target.currentHp ?? 100
+    const newVal = def.incremental
+      ? resolveIncremental(current, op.value)
+      : Number(op.value)
+    target.currentHp = Math.max(0, newVal)
+    return null
+  }
+
+  // 改名：使用 npcStore.renameNpc() 统一处理（含 aliases/nameHistory/事迹 维护）
+  if (field === 'name' && op.op === 'replace' && typeof op.value === 'string') {
+    const newName = op.value.trim()
+    if (!newName) return null
+    const renameResult = npc.renameNpc(target.id, newName)
+    if (!renameResult) return null
+    if (renameResult.isIdentityReveal) {
+      return `🪪 身份揭示：${renameResult.oldName} → ${renameResult.newName}`
+    }
+    return `📝 ${renameResult.oldName} → ${renameResult.newName}`
   }
 
   // 通用字段更新
@@ -512,17 +868,99 @@ function applyNpcPath(op: VarOperation, parts: string[], npc: ReturnType<typeof 
 }
 
 // ============================================================
-// 辅助函数
+// 通用递归 RFC 6902 Patch（yijiekkk-style）
+// 在任何 JSON 树上执行 add/replace/remove 操作，不依赖具体 Store
 // ============================================================
 
-export function normalizeItemType(raw: string): InventoryItem['type'] {
-  const t = String(raw || '').toLowerCase()
-  if (t.includes('武器') || t.includes('weapon')) return 'weapon'
-  if (t.includes('防具') || t.includes('铠甲') || t.includes('armor') || t.includes('盔甲')) return 'armor'
-  if (t.includes('消耗') || t.includes('药') || t.includes('consumable') || t.includes('potion') || t.includes('食物') || t.includes('food')) return 'consumable'
-  if (t.includes('材料') || t.includes('material') || t.includes('零件') || t.includes('矿石') || t.includes('component')) return 'material'
-  if (t.includes('关键') || t.includes('key') || t.includes('钥匙') || t.includes('通行证') || t.includes('令牌')) return 'key'
-  return 'other'
+export interface RfcOperation {
+  op: 'add' | 'replace' | 'remove'
+  path: string
+  value?: any
+}
+
+/**
+ * 在任意 JSON 对象上批量执行 RFC 6902 操作。
+ * 路径自动补全中间节点。增量字符串 "+N"/"-N" 自动计算。
+ */
+export function applyRfcPatch(state: Record<string, any>, operations: RfcOperation[]): string[] {
+  const results: string[] = []
+  for (const op of operations) {
+    if (!op.path || !op.op) continue
+    const pathParts = op.path.split('/').filter(Boolean)
+    if (pathParts.length === 0) continue
+    const result = applyNodeOp(state, pathParts, op.op, op.value)
+    if (result) results.push(result)
+  }
+  return results
+}
+
+/**
+ * 在单个节点上递归执行操作。
+ * 支持增量字符串（"+N"/"-N"），自动创建中间对象/数组。
+ */
+function applyNodeOp(
+  node: any,
+  pathParts: string[],
+  op: string,
+  value: any,
+): string | null {
+  if (pathParts.length === 0) return null
+  const key = pathParts[0]
+
+  // ---- 叶子节点 ----
+  if (pathParts.length === 1) {
+    switch (op) {
+      case 'add': {
+        if (Array.isArray(node)) {
+          if (key === '-') {
+            node.push(value)
+          } else {
+            const idx = parseInt(key)
+            if (!isNaN(idx) && idx >= 0) node.splice(idx, 0, value)
+          }
+        } else {
+          node[key] = value
+        }
+        return null
+      }
+      case 'replace': {
+        const current = node[key]
+        // 增量字符串 "+N" / "-N"
+        if (typeof value === 'string' && /^[+-]\d+(\.\d+)?$/.test(value)) {
+          const curNum = typeof current === 'number' ? current : 0
+          const newNum = curNum + Number(value)
+          node[key] = newNum
+          const diff = newNum - curNum
+          if (diff !== 0) return `Δ ${key}: ${diff > 0 ? '+' : ''}${diff}`
+          return null
+        }
+        // 直接替换
+        node[key] = value
+        return null
+      }
+      case 'remove': {
+        if (Array.isArray(node)) {
+          const idx = parseInt(key)
+          if (!isNaN(idx) && idx >= 0 && idx < node.length) {
+            const removed = node.splice(idx, 1)[0]
+            return removed?.name ? `🗑️ ${removed.name}` : null
+          }
+        } else {
+          delete node[key]
+        }
+        return null
+      }
+    }
+    return null
+  }
+
+  // ---- 递归：自动创建中间节点 ----
+  if (node[key] === undefined || node[key] === null) {
+    const nextKey = pathParts[1]
+    node[key] = (nextKey === '-' || !isNaN(parseInt(nextKey))) ? [] : {}
+  }
+
+  return applyNodeOp(node[key], pathParts.slice(1), op, value)
 }
 
 // ============================================================
@@ -536,8 +974,9 @@ export function processVariableUpdates(text: string): VarResult {
   const opsApplied: { op: VarOperation; result: string | null }[] = []
   const summaries: string[] = []
 
-  // 去掉所有标签
+  // 去掉所有变量标签和思维链（思维链是 AI 内部推理，不应出现在聊天显示中）
   const tagPatterns = [
+    /<thinking\b[^>]*>[\s\S]*?<\/thinking\s*>/gi,
     /<mj_variables\b[^>]*>[\s\S]*?<\/mj_variables\s*>/gi,
     /<variables?\b[^>]*>[\s\S]*?<\/variables?\s*>/gi,
     /<patch\b[^>]*>[\s\S]*?<\/patch\s*>/gi,
@@ -546,11 +985,48 @@ export function processVariableUpdates(text: string): VarResult {
     cleanText = cleanText.replace(re, '')
   }
 
-  const payloads = extractAllJsonPayloads(text)
+  // 先从原始文本中去掉 <thinking> 块，防止平衡 JSON 提取误读其中的结构化内容
+  const textForExtract = text.replace(/<thinking\b[^>]*>[\s\S]*?<\/thinking\s*>/gi, '')
+  const payloads = extractAllJsonPayloads(textForExtract)
+
+  // --- 调试日志：显示 AI 原始变量输出 ---
+  const hasThinking = /<thinking\b/i.test(text)
+  const hasMjVars = /<mj_variables\b/i.test(text)
+
+  if (payloads.length > 0) {
+    console.warn('[wandou] ✅ 标签 | thinking:' + hasThinking + ' | mj_variables:' + hasMjVars + ' | 提取到 ' + payloads.length + ' 个 JSON 负载')
+    for (let i = 0; i < payloads.length; i++) {
+      console.warn('[wandou] 负载 #' + (i + 1) + ':', payloads[i].slice(0, 500))
+    }
+  } else if (text.includes('mj_variables') || text.includes('variables')) {
+    console.warn('[wandou] ⚠️ 标签存在但解析失败 | 原文片段:', text.slice(Math.max(0, text.indexOf('mj_variables') - 20), text.indexOf('mj_variables') + 500))
+  } else {
+    console.warn('[wandou] ❌ 未检测到 <mj_variables> 标签 | thinking:' + hasThinking + ' | 本轮变量不会更新')
+  }
+
+  // 提取 thinking 内容用于合规检查
+  const thinkMatch = text.match(/<thinking\b[^>]*>([\s\S]*?)<\/thinking\s*>/i)
+  if (thinkMatch) {
+    const thinkContent = thinkMatch[1].trim()
+    const hasStep0 = /Step\.0|身份揭示/i.test(thinkContent)
+    const hasStep3 = /Step\.[3-7]|规则自检|去重.*replace|占位值.*replace|物品变化|任务变化|NPC.*变化|时间检查|位置检查|天气检查/i.test(thinkContent)
+    const tooShort = thinkContent.length < 200
+    const onlyNoChange = /^(无变化|无需更新|没有任何变化|nothing.*change)[\s。.]*$/i.test(thinkContent.trim())
+    const hasNoChange = /无变化|无需更新|没有任何|nothing.*change/i.test(thinkContent)
+    console.warn('[wandou] thinking 合规: Step.0=' + hasStep0 + ' | 多步骤=' + hasStep3 + ' | 太短=' + tooShort + ' | 全是无变化=' + onlyNoChange + ' | 长度=' + thinkContent.length + '字符')
+    if (tooShort || onlyNoChange || (!hasStep3 && hasNoChange)) {
+      console.warn('[wandou] ⚠️ AI thinking 太简略或不完整！可能遗漏变量更新。thinking 应包含 Step.0~Step.7 逐项检查，每项写明当前值→变化→结论')
+    }
+  } else {
+    console.error('[wandou] 🚨🚨🚨 本轮无 <thinking> 标签！AI 跳过了思考步骤。')
+  }
 
   for (const payload of payloads) {
     const ops = parseOperations(payload)
+    console.warn('[wandou] 解析到', ops.length, '个操作:', ops.map(o => `${o.op} ${o.path}`).join(', ') || '(无)')
     for (const op of ops) {
+      // 优先走逐 Store 路由（保持向后兼容），
+      // _useUnifiedPatch=true 时走统一状态树路径
       const result = applyOperation(op)
       opsApplied.push({ op, result })
       if (result) summaries.push(result)

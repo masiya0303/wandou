@@ -22,6 +22,9 @@ export type WandouEvent =
   | 'state:sync_error'
   | 'inventory:changed'
   | 'inventory:toast'
+  | 'quest:added'
+  | 'quest:removed'
+  | 'quest:updated'
   | 'theme:changed'
   | 'settings:saved'
 

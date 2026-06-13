@@ -133,9 +133,9 @@ function openBook(target: string) {
   view.value = target
 }
 
-// 确保全局世界书已初始化（仅首次挂载时补一次）
+// 确保全局世界书数据完整性
 onMounted(() => {
-  if (wbs.globalWorldBook.length === 0) wbs.initGlobalBook()
+  wbs.repairGlobalBook()
 })
 
 function backToList() { view.value = 'list' }
@@ -407,7 +407,7 @@ const POS_LABELS: Record<string, string> = {
 .wb { position: absolute; inset: 0; color: var(--theme-text-main); display: flex; flex-direction: column; overflow: hidden; }
 
 /* ---- 书列表 ---- */
-.book-list { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+.book-list { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; padding-top: 8px; }
 .book-card {
   display: flex; align-items: center; gap: 12px;
   padding: 14px 18px; border-radius: 16px; cursor: pointer; transition: all 0.25s;

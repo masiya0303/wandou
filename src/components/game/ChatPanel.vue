@@ -3,19 +3,104 @@
 import { ref, watch, nextTick, computed } from 'vue'
 import { useChatStore, getErrorHint, type ErrorType } from '@/stores/chatStore'
 import { usePlayerStore } from '@/stores/playerStore'
+import { useNpcStore } from '@/stores/npcStore'
+import NpcDetailModal from './NpcDetailModal.vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 
 const chat = useChatStore()
 const player = usePlayerStore()
+const npc = useNpcStore()
 const el = ref<HTMLElement | null>(null)
 
-watch(() => chat.messages.length, scrollDown)
+/** NPC 详情弹窗 */
+const detailNpcId = ref<string | null>(null)
+const detailNpc = computed(() => detailNpcId.value ? npc.npcs.find(n => n.id === detailNpcId.value) || null : null)
+
+function cakeThinkingHtml(thinkingText: string): string {
+  const escaped = thinkingText
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+  return `<div class="cake-cot"><details><summary><span class="cake-icon">🍰</span><span>奶油思维 · 掀开尝一口</span></summary><div class="cake-slice"><span class="cake-strawberry">🍓</span><pre class="cake-content">${escaped}</pre></div></details></div>`
+}
+
 watch(() => chat.messages[chat.messages.length - 1]?.content.length, scrollDown)
 
 async function scrollDown() { await nextTick(); if (el.value) el.value.scrollTop = el.value.scrollHeight }
 
 function time(ts: number) { return new Date(ts).toLocaleTimeString('zh-CN', { hour:'2-digit', minute:'2-digit' }) }
+
+function highlightNpcNames(html: string): string {
+  const activeNpcs = npc.npcs.filter(n => npc.getNpcCategory(n) !== '离场')
+  if (activeNpcs.length === 0) return html
+
+  // 按名字长度降序（长名优先，防止"远坂凛子"被"远坂凛"误匹配）
+  const sorted = activeNpcs
+    .filter(n => n.name && n.name.length >= 1 && n.name !== '???')
+    .sort((a, b) => b.name.length - a.name.length)
+
+  if (sorted.length === 0) return html
+
+  // 构建正则：用 | 连接所有名字，每个名字都转义正则特殊字符
+  const escapedNames = sorted.map(n => n.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  const namePattern = escapedNames.join('|')
+  const nameRe = new RegExp(namePattern, 'g')
+
+  // 构建名字 → id 查找
+  const idByLowerName = new Map<string, string>()
+  for (const n of sorted) idByLowerName.set(n.name.toLowerCase(), n.id)
+
+  // DOMParser 解析 → 遍历文本节点 → 替换
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+
+  function walk(node: Node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent || ''
+      if (!text.trim() || !nameRe.test(text)) return
+      nameRe.lastIndex = 0 // reset
+
+      const parent = node.parentNode
+      if (!parent) return
+
+      // 用 split + intersperse 重建，避免 regex 替换破坏 DOM
+      const frag = document.createDocumentFragment()
+      let lastIdx = 0
+      let m: RegExpExecArray | null
+      while ((m = nameRe.exec(text)) !== null) {
+        // 匹配前的纯文本
+        if (m.index > lastIdx) {
+          frag.appendChild(document.createTextNode(text.slice(lastIdx, m.index)))
+        }
+        // 匹配的 NPC 名 → 可点击 span
+        const matchedName = m[0]
+        const npcId = idByLowerName.get(matchedName.toLowerCase()) || ''
+        const span = document.createElement('span')
+        span.className = 'npc-mention'
+        span.dataset.npcId = npcId
+        span.title = '点击查看 NPC 详情'
+        span.textContent = matchedName
+        frag.appendChild(span)
+        lastIdx = m.index + matchedName.length
+      }
+      // 末尾剩余文本
+      if (lastIdx < text.length) {
+        frag.appendChild(document.createTextNode(text.slice(lastIdx)))
+      }
+
+      parent.replaceChild(frag, node)
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as Element
+      if (el.classList?.contains('npc-mention')) return
+      const tag = el.tagName.toLowerCase()
+      if (tag === 'script' || tag === 'style' || tag === 'code' || tag === 'pre') return
+      for (const child of Array.from(node.childNodes)) walk(child)
+    }
+  }
+
+  walk(doc.body)
+  return doc.body.innerHTML
+}
 
 // 渲染缓存：消息 id → 渲染后 HTML
 const renderCache = new Map<string, string>()
@@ -24,8 +109,17 @@ function renderedHtml(id: string, content: string): string {
   const prev = renderCache.get(id)
   if (prev !== undefined) return prev
   const html = DOMPurify.sanitize(marked.parse(content, { breaks: true }) as string)
-  renderCache.set(id, html)
-  return html
+  const highlighted = highlightNpcNames(html)
+  renderCache.set(id, highlighted)
+  return highlighted
+}
+
+// 事件委托：点击 NPC 名字 → 打开详情面板
+function handleChatClick(e: MouseEvent) {
+  const target = (e.target as HTMLElement).closest('.npc-mention') as HTMLElement | null
+  if (target?.dataset.npcId) {
+    detailNpcId.value = target.dataset.npcId
+  }
 }
 
 // 流式输出中自动刷新最后一条 assistant 的缓存
@@ -72,13 +166,13 @@ function handleErrorAction() {
 </script>
 
 <template>
-  <div ref="el" class="chat">
+  <div ref="el" class="chat" @click="handleChatClick">
     <div v-if="chat.messages.length === 0 && !chat.isGenerating" class="empty">
       <div class="empty-diamond">◆</div>
       <p class="empty-cn">通讯频道静默中</p>
       <p class="empty-en">COMMUNICATION CHANNEL</p>
       <div class="empty-line"></div>
-      <p class="empty-hint">输入指令，启程星际冒险</p>
+      <p class="empty-hint">输入指令，开始冒险</p>
     </div>
 
     <template v-for="(m, idx) in chat.messages" :key="m.id">
@@ -98,8 +192,17 @@ function handleErrorAction() {
           <span class="ai-dot"></span>
           <span class="ai-name">乌拉</span>
           <span class="ai-time">{{ time(m.timestamp) }}</span>
+          <span class="ai-spacer"></span>
+          <button
+            v-if="!chat.isGenerating"
+            class="ai-regenerate"
+            title="重新生成此回复"
+            @click="chat.regenerate(m.id)"
+          >🔄</button>
         </div>
         <div class="ai-body glass-pink" v-html="renderedHtml(m.id, m.content)"></div>
+        <!-- 思考过程 — 奶油蛋糕折叠卡片 -->
+        <div v-if="chat.thinkingMap[m.id]" class="ai-thinking" v-html="cakeThinkingHtml(chat.thinkingMap[m.id])"></div>
       </div>
 
       <!-- user -->
@@ -130,6 +233,9 @@ function handleErrorAction() {
         <button v-if="chat.errorType !== 'auth'" class="err-dismiss" @click="chat.dismissError()">忽略</button>
       </div>
     </div>
+
+    <!-- NPC 详情弹窗（点名字触发） -->
+    <NpcDetailModal v-if="detailNpc" :npc="detailNpc" @close="detailNpcId = null" />
   </div>
 </template>
 
@@ -168,12 +274,167 @@ function handleErrorAction() {
 .ai-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--theme-text-accent); }
 .ai-name { font-size: 12px; font-weight: 600; color: var(--theme-text-accent); }
 .ai-time { font-size: 10px; color: rgba(112,88,98,0.45); }
+.ai-spacer { flex: 1; }
+.ai-regenerate {
+  background: none; border: 1px solid var(--theme-border-ice); border-radius: 12px;
+  color: var(--theme-text-main); font-size: 11px; cursor: pointer;
+  padding: 1px 8px; opacity: 0; transition: opacity 0.2s;
+  font-family: inherit;
+}
+.ai-msg:hover .ai-regenerate { opacity: 0.5; }
+.ai-regenerate:hover { opacity: 1 !important; border-color: var(--theme-text-accent); background: rgba(255,182,193,0.1); }
+.ai-regenerate:active { transform: scale(0.95); }
 
-/* user */
+/* thinking box — cake renders via v-html, styled in unscoped block below */
+.ai-thinking { margin-top: 8px; }
+</style>
+
+<!-- 蛋糕卡片（v-html 渲染，必须用非 scoped 样式） -->
+<style>
+.cake-cot {
+  margin: 1.8rem 0 3rem;
+  font-family: 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  position: relative;
+}
+
+/* === 折叠按钮：悬浮糖霜胶囊 === */
+.cake-cot details summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 20px 7px 8px;
+  background: linear-gradient(180deg, #FFFFFF 0%, #FFF0F5 100%);
+  border-radius: 40px;
+  color: #D47A9A;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  box-shadow:
+    0 6px 14px rgba(255, 182, 193, 0.28),
+    inset 0 -2px 0 rgba(255, 228, 232, 0.9),
+    inset 0 2px 3px #FFFFFF;
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  -webkit-user-select: none;
+}
+.cake-cot summary::-webkit-details-marker { display: none; }
+.cake-cot summary:hover { transform: translateY(-2px) rotate(-1deg); }
+
+.cake-cot .cake-icon {
+  width: 30px; height: 30px;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 30% 30%, #FFD1DC, #FF8FA8);
+  border-radius: 50%;
+  font-size: 15px;
+  box-shadow:
+    inset 0 -3px 4px rgba(180, 80, 110, 0.25),
+    inset 0 2px 2px rgba(255, 255, 255, 0.8);
+}
+
+/* 展开时按钮微动 */
+.cake-cot details[open] summary .cake-icon { animation: cake-wiggle 0.7s ease; }
+.cake-cot details[open] summary { margin-bottom: 0; }
+
+/* === 灵魂：展开后的「奶油蛋糕切片」 === */
+.cake-cot .cake-slice {
+  position: relative;
+  margin-top: 32px;
+  padding: 38px 32px 34px;
+  background:
+    radial-gradient(ellipse at 20% 0%, #FFE4EC 0%, transparent 50%),
+    radial-gradient(ellipse at 90% 100%, #FFD6E0 0%, transparent 60%),
+    linear-gradient(165deg, #FFF5F8 0%, #FFE0E8 100%);
+  clip-path: polygon(0 6%, 3% 2%, 8% 5%, 15% 1%, 22% 5%, 30% 1%, 38% 4%, 46% 1%, 54% 5%, 62% 1%, 70% 4%, 78% 2%, 85% 5%, 92% 1%, 100% 5%, 100% 96%, 98% 100%, 2% 100%, 0 96%);
+  filter: drop-shadow(0 12px 18px rgba(255, 150, 180, 0.28)) drop-shadow(0 2px 4px rgba(255, 150, 180, 0.15));
+  animation: cake-unroll 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* 顶部奶油层 */
+.cake-cot .cake-slice::before {
+  content: '';
+  position: absolute;
+  top: 6px; left: 0; right: 0;
+  height: 60px;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.95), rgba(255,240,245,0.5) 70%, transparent 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* 内部便签纸 */
+.cake-cot .cake-content {
+  position: relative;
+  z-index: 2;
+  padding: 22px 24px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 14px;
+  color: #8A5A6E;
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: 'Courier New', 'Source Code Pro', monospace;
+  box-shadow:
+    0 4px 16px rgba(255, 182, 193, 0.18),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(6px);
+  max-height: 400px;
+  overflow-y: auto;
+  margin: 0;
+}
+
+/* 装饰：左侧悬浮的小草莓 */
+.cake-cot .cake-strawberry {
+  position: absolute;
+  top: -8px; left: -6px;
+  font-size: 28px;
+  transform: rotate(-18deg);
+  filter: drop-shadow(0 4px 6px rgba(255, 100, 130, 0.35));
+  z-index: 5;
+  animation: cake-float 3s ease-in-out infinite;
+}
+
+/* === 动画 === */
+@keyframes cake-unroll {
+  0% { opacity: 0; transform: translateY(-20px) scale(0.96); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes cake-wiggle {
+  0%, 100% { transform: rotate(0); }
+  25% { transform: rotate(-12deg) scale(1.1); }
+  75% { transform: rotate(12deg) scale(1.1); }
+}
+@keyframes cake-float {
+  0%, 100% { transform: rotate(-18deg) translateY(0); }
+  50% { transform: rotate(-15deg) translateY(-4px); }
+}
+
+@media (max-width: 480px) {
+  .cake-cot .cake-slice { padding: 32px 18px 24px; }
+  .cake-cot .cake-content { padding: 16px 16px; font-size: 12px; }
+}
+</style>
+
+<style scoped>
 .user-msg { margin-bottom: 18px; display: flex; flex-direction: column; align-items: flex-end; }
 .user-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
 .user-time { font-size: 10px; color: rgba(112,88,98,0.45); }
 .user-name { font-size: 12px; font-weight: 600; color: var(--theme-text-main); }
+
+/* NPC 名字高亮 */
+.ai-body :deep(.npc-mention), .user-body :deep(.npc-mention), .sys-body :deep(.npc-mention) {
+  color: #9575cd;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 1px dashed rgba(149,117,205,0.4);
+  padding: 0 1px;
+  transition: background 0.15s;
+}
+.ai-body :deep(.npc-mention:hover), .user-body :deep(.npc-mention:hover), .sys-body :deep(.npc-mention:hover) {
+  background: rgba(149,117,205,0.1);
+  border-bottom-color: #9575cd;
+}
 
 /* bubble */
 .ai-body, .user-body {

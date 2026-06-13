@@ -1,5 +1,8 @@
 // ============================================================
 // wandou · 世界书 Store（全局 + 当前世界 + 浏览用）
+//
+// 系统协议已从世界书剥离，由 contextBuilder 动态生成。
+// 全局世界书只保留用户自己添加的条目。
 // ============================================================
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
@@ -28,37 +31,11 @@ export const useWorldBookStore = defineStore('worldBook', () => {
   // ---- 全局世界书 CRUD ----
   function _saveGlobalWb() { storage.saveGlobalWorldBook(globalWorldBook.value) }
 
-  const PROTOCOL_ENTRIES: WorldBookEntry[] = [
-    {
-      id: 'sys-protocol-output',
-      keys: [],
-      comment: '状态输出协议',
-      content: '【输出格式强制要求】\n1) 回复末尾必须用 <variables> 标签包裹 RFC 6902 JSON Patch 数组。\n2) 标签外禁止输出任何解释文本。\n3) 若无变量变化，输出 <variables>[]</variables>。\n4) 禁止输出注释、禁止输出伪 JSON。\n\n【最小合法示例】\n<variables>\n[\n  {"op":"replace","path":"/player/gold","value":"-450"},\n  {"op":"add","path":"/player/inventory/-","value":{"name":"护符指环","quantity":1,"type":"key","description":"..."}}\n]\n</variables>',
-      enabled: true,
-      priority: 100,
-      position: 'at_constant',
-    },
-    {
-      id: 'sys-protocol-paths',
-      keys: [],
-      comment: '路径速查',
-      content: '【变量路径】\n/player/gold(金币,+N/-N) /player/inventory/-(add物品) /player/inventory/物品名(remove)\n/player/attributes/HP(生命,+N/-N) /player/attributes/MP(法力)\n/player/quests/-(add任务) /world/time(时间) /world/location(地点)\n/npcs/NPC名/favor(好感,+N/-N)\n\n物品value格式: {"name":"名称","quantity":数量,"type":"weapon|armor|consumable|material|key|other","description":"简述"}',
-      enabled: true,
-      priority: 99,
-      position: 'at_constant',
-    },
-  ]
-
-  function initGlobalBook() {
-    // 确保协议条目始终存在（新增或更新）
-    for (const proto of PROTOCOL_ENTRIES) {
-      const idx = globalWorldBook.value.findIndex(e => e.id === proto.id)
-      if (idx >= 0) {
-        // 更新已有条目
-        globalWorldBook.value[idx] = { ...proto }
-      } else {
-        globalWorldBook.value.push({ ...proto })
-      }
+  function repairGlobalBook() {
+    // 防御：如果不是数组，重置（存储损坏时可能发生）
+    if (!Array.isArray(globalWorldBook.value)) {
+      console.warn('[wandou] 全局世界书数据异常，已自动修复')
+      globalWorldBook.value = []
     }
     _saveGlobalWb()
   }
@@ -167,7 +144,7 @@ export const useWorldBookStore = defineStore('worldBook', () => {
     globalWorldBook, globalWorldBookEnabled, worldBook, worldBookEnabled,
     browsingBook, browsingBookEnabled, browsingWorldId, browsingWorldName,
     globalEnabledEntries, worldEnabledEntries,
-    initGlobalBook,
+    repairGlobalBook,
     addGlobalEntries, removeGlobalEntry, toggleGlobalEntry, resetGlobalBook,
     addWorldEntries, removeWorldEntry, toggleWorldEntry, resetWorldBook,
     loadForBrowse, clearBrowse,

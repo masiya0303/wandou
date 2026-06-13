@@ -57,6 +57,8 @@ export const useRegexStore = defineStore('regex', () => {
     return entries.value.filter(e => !e.disabled)
   }
 
+  function save() { _save() }
+
   return {
     entries, enabled, enabledCount, totalCount,
     add, remove, toggle, reset, importFromJson, activeEntries, save,

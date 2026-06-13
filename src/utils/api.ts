@@ -67,7 +67,7 @@ export async function chatStream(
   activeAbort = ac
 
   if (signal) {
-    if (signal.aborted) { activeAbort = null; throw new DOMException(signal.reason, 'AbortError') }
+    if (signal.aborted) { activeAbort = null; return '' }
     signal.addEventListener('abort', () => ac.abort(signal.reason), { once: true })
   }
 

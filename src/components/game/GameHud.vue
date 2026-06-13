@@ -7,6 +7,7 @@ import { useStateStore } from '@/stores/stateStore'
 import { bus } from '@/utils/events'
 import type { InventoryItem, Quest } from '@/types/world'
 import type { NpcEntry } from '@/types/npc'
+import NpcDetailModal from './NpcDetailModal.vue'
 
 const player = usePlayerStore()
 const npc = useNpcStore()
@@ -29,12 +30,22 @@ const detailItem = ref<InventoryItem | null>(null)
 function openItemDetail(item: InventoryItem) {
   detailItem.value = item
 }
+
+// NPC 详情弹窗
+const detailNpc = ref<NpcEntry | null>(null)
+
+function openNpcDetail(n: NpcEntry) {
+  detailNpc.value = n
+}
 const grouped = computed(() => {
   const m: Record<string, InventoryItem[]> = {}
   for (const c of invCategories) m[c] = player.inventory.filter((i: InventoryItem) => i.type === c)
   return m
 })
-const activeNpcs = computed(() => npc.npcs.filter((n: NpcEntry) => n.enabled))
+const activeNpcs = computed(() => npc.getActiveNpcs())
+
+const CATEGORY_LABELS: Record<string, string> = { '在场': '', '离场': '💤', '重点': '⭐' }
+const CATEGORY_CLASSES: Record<string, string> = { '在场': 'cat-present', '离场': 'cat-away', '重点': 'cat-key' }
 const activeQ = computed(() => player.quests.filter((q: Quest) => q.status === 'active'))
 const doneQ = computed(() => player.quests.filter((q: Quest) => q.status === 'completed'))
 const gold = computed(() => player.character.gold ?? 0)
@@ -79,6 +90,26 @@ onMounted(() => {
     if (payload?.message) {
       showToast(payload.message)
     }
+  })
+  bus.on('quest:added', (q: any) => {
+    if (q?.title) showToast(`📋 新任务：${q.title}`)
+  })
+  bus.on('quest:updated', (q: any) => {
+    if (q?.title && q?.status === 'completed') showToast(`✅ 任务完成：${q.title}`)
+    else if (q?.title && q?.status === 'failed') showToast(`❌ 任务失败：${q.title}`)
+  })
+  bus.on('npc:identityRevealed', (payload: any) => {
+    if (payload?.newName && payload?.oldName) {
+      showToast(`🪪 身份揭示：${payload.oldName} → ${payload.newName}`)
+    }
+  })
+  bus.on('npc:renamed', (payload: any) => {
+    if (payload?.newName && payload?.oldName) {
+      showToast(`📝 ${payload.oldName} → ${payload.newName}`)
+    }
+  })
+  bus.on('chat:thinking_missing', () => {
+    showToast('⚠️ AI 本轮未输出思考过程（可能遗漏变量更新）')
   })
 })
 
@@ -156,18 +187,48 @@ onUnmounted(() => {
       <!-- npc -->
       <template v-if="tab === 'npc'">
         <div v-if="activeNpcs.length === 0" class="none">暂无活跃 NPC</div>
-        <div v-for="n in activeNpcs" :key="n.id" class="card glass-panel">
-          <div class="card-head"><span class="card-name">{{ n.name }}</span><span v-if="n.role" class="card-sub">{{ n.role }}</span></div>
+        <div v-for="n in activeNpcs" :key="n.id" class="card glass-panel"
+          :class="{
+            'card-revealed': n.identityRevealed,
+            'card-key': npc.getNpcCategory(n) === '重点',
+            'card-away': npc.getNpcCategory(n) === '离场',
+          }"
+          @click="openNpcDetail(n)">
+          <div class="card-head">
+            <span class="card-cat-badge" :class="CATEGORY_CLASSES[npc.getNpcCategory(n)]">{{ CATEGORY_LABELS[npc.getNpcCategory(n)] }}</span>
+            <span class="card-name">{{ n.name }}</span>
+            <span v-if="n.identityRevealed" class="card-reveal-badge" title="身份已揭示">🪪</span>
+            <span v-if="n.role" class="card-sub">{{ n.role }}</span>
+            <span class="card-id">ID: {{ n.id.slice(0, 12) }}...</span>
+          </div>
           <p v-if="n.personality" class="card-text">{{ n.personality.slice(0, 100) }}{{ n.personality.length > 100 ? '...' : '' }}</p>
+          <div v-if="n.aliases && n.aliases.length > 0" class="card-aliases">
+            <span class="alias-label">别名：</span>
+            <span v-for="a in n.aliases" :key="a" class="alias-tag">{{ a }}</span>
+          </div>
+          <div v-if="n.identityHistory && n.identityHistory.length > 0" class="card-history">
+            <span class="history-label">改名：</span>
+            <span v-for="(h, i) in n.identityHistory" :key="i" class="history-item">{{ h.from }} → {{ h.to }}</span>
+          </div>
+          <div v-if="n.人物事迹 && n.人物事迹.length > 0" class="card-chronicles">
+            <span class="history-label">事迹：</span>
+            <div class="chronicle-list">
+              <span v-for="(c, i) in npc.getRecentChronicles(n.id, 3)" :key="i" class="chronicle-item">{{ c }}</span>
+            </div>
+          </div>
         </div>
       </template>
       <!-- quest -->
       <template v-if="tab === 'quest'">
         <div class="cat-head">进行中 <span class="cat-n">{{ activeQ.length }}</span></div>
         <div v-if="activeQ.length === 0" class="none">暂无任务</div>
-        <div v-for="q in activeQ" :key="q.id" class="card glass-panel">
-          <div class="card-name">{{ q.title }}</div>
-          <p class="card-text">{{ q.description.slice(0, 120) }}{{ q.description.length > 120 ? '...' : '' }}</p>
+        <div v-for="q in activeQ" :key="q.id" class="card glass-panel" :style="{ borderLeft: '3px solid ' + (q.color || '#ffa726') }">
+          <div class="card-head">
+            <span class="card-name">{{ q.title }}</span>
+            <span class="quest-type-tag" :style="{ background: (q.color || '#ffa726') + '22', color: q.color || '#ffa726', borderColor: q.color || '#ffa726' }">{{ q.questType || '支线' }}</span>
+          </div>
+          <p class="card-text">{{ q.description.slice(0, 80) }}{{ q.description.length > 80 ? '...' : '' }}</p>
+          <p v-if="q.reward" class="card-reward">🎁 {{ q.reward }}</p>
         </div>
         <div v-if="doneQ.length" class="cat-head" style="margin-top:12px">已完成 <span class="cat-n">{{ doneQ.length }}</span></div>
         <div v-for="q in doneQ" :key="q.id" class="card glass-panel" style="opacity:0.5">
@@ -175,6 +236,9 @@ onUnmounted(() => {
         </div>
       </template>
     </div>
+
+    <!-- NPC 详情弹窗（放在面板内但不受标签切换影响） -->
+    <NpcDetailModal v-if="detailNpc" :npc="detailNpc" @close="detailNpc = null" />
   </div>
 
   <!-- tab bar -->
@@ -459,9 +523,47 @@ onUnmounted(() => {
 .modal-enter-from .modal-card { transform: scale(0.9); }
 .modal-leave-to { opacity: 0; }
 .modal-leave-to .modal-card { transform: scale(0.95); }
-.card { padding: 8px 10px; border-radius: 8px; margin-bottom: 6px; background: rgba(255,182,193,0.1); }
-.card-head { display: flex; align-items: baseline; gap: 6px; margin-bottom: 2px; }
+.card { padding: 8px 10px; border-radius: 8px; margin-bottom: 6px; background: rgba(255,182,193,0.1); cursor: pointer; transition: transform 0.1s, box-shadow 0.1s; }
+.card:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(255,128,168,0.12); }
+.card:active { transform: scale(0.98); }
+.card-revealed { border-left: 3px solid #c9b1ff; }
+.card-key { border-left: 3px solid #ffb74d; background: rgba(255,183,77,0.06); }
+.card-away { opacity: 0.4; }
+.card-head { display: flex; align-items: baseline; gap: 6px; margin-bottom: 2px; flex-wrap: wrap; }
 .card-name { font-size: 13px; font-weight: 600; color: var(--theme-text-main); }
+.card-cat-badge {
+  font-size: 10px; flex-shrink: 0; border-radius: 4px; padding: 1px 4px; line-height: 1.3;
+}
+.cat-present { }
+.cat-away { color: var(--theme-text-main); opacity: 0.35; background: rgba(0,0,0,0.04); }
+.cat-key { color: #fff; background: #ffb74d; font-weight: 600; }
+.card-id {
+  font-size: 8px; color: var(--theme-text-main); opacity: 0.25; margin-left: auto; flex-shrink: 0;
+  font-family: monospace;
+}
+.card-reveal-badge { font-size: 12px; flex-shrink: 0; }
 .card-sub { font-size: 11px; color: var(--theme-text-accent); }
 .card-text { font-size: 12px; color: var(--theme-text-main); opacity: 0.7; margin: 0; line-height: 1.4; }
+.card-aliases { margin-top: 4px; display: flex; flex-wrap: wrap; align-items: center; gap: 3px; }
+.alias-label { font-size: 10px; color: var(--theme-text-main); opacity: 0.4; }
+.alias-tag {
+  font-size: 9px; color: var(--theme-text-accent); background: rgba(255,182,193,0.12);
+  padding: 1px 6px; border-radius: 6px; border: 1px solid var(--theme-border-ice);
+}
+.card-history { margin-top: 3px; display: flex; flex-wrap: wrap; align-items: center; gap: 3px; }
+.card-chronicles { margin-top: 4px; }
+.chronicle-list { display: flex; flex-direction: column; gap: 1px; margin-top: 2px; }
+.chronicle-item {
+  font-size: 10px; color: var(--theme-text-main); opacity: 0.55;
+  padding: 1px 0; line-height: 1.4;
+}
+.history-label { font-size: 10px; color: var(--theme-text-main); opacity: 0.4; }
+.history-item {
+  font-size: 9px; color: #9575cd; background: rgba(149,117,205,0.08);
+  padding: 1px 6px; border-radius: 6px;
+}
+.quest-type-tag {
+  font-size: 9px; font-weight: 600; padding: 1px 6px; border-radius: 8px; border: 1px solid; white-space: nowrap;
+}
+.card-reward { font-size: 11px; color: var(--theme-text-accent); margin: 4px 0 0; font-weight: 500; }
 </style>

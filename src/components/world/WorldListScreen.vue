@@ -57,7 +57,7 @@ function fmt(ts: number) {
 .orb-pink { width: 300px; height: 300px; top: 20%; right: 10%; background: rgba(255,128,168,0.04); }
 .orb-rose { width: 400px; height: 400px; bottom: 10%; left: 5%; background: rgba(255,182,193,0.04); animation-delay: -3s; }
 .container { position: relative; z-index: 1; padding: 20px; max-width: 640px; width: 100%; margin: 0 auto; }
-.head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+.head { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; margin-bottom: 24px; }
 .title { text-align: center; }
 .title h1 { font-size: 22px; color: #e0e8ff; margin: 0; font-weight: 700; }
 .title p { font-size: 10px; color: var(--theme-border-light); letter-spacing: 0.15em; margin: 2px 0 0; }

@@ -37,11 +37,35 @@ type ItemType = typeof VALID_TYPES[number]
 
 function normalizeType(raw: string): ItemType {
   const t = String(raw || '').toLowerCase()
-  if (t.includes('武器') || t.includes('weapon')) return 'weapon'
-  if (t.includes('防具') || t.includes('铠甲') || t.includes('armor') || t.includes('盔甲')) return 'armor'
-  if (t.includes('消耗') || t.includes('药') || t.includes('consumable') || t.includes('potion') || t.includes('食物') || t.includes('food')) return 'consumable'
-  if (t.includes('材料') || t.includes('material') || t.includes('零件') || t.includes('矿石') || t.includes('component')) return 'material'
-  if (t.includes('关键') || t.includes('key') || t.includes('钥匙') || t.includes('通行证') || t.includes('令牌')) return 'key'
+  // weapon: 武器 / 装备（剑/刀/弓/枪/杖等）/ 兵器
+  if (t.includes('武器') || t.includes('weapon') || t.includes('兵器') ||
+      t.includes('剑') || t.includes('刀') || t.includes('弓') || t.includes('枪') ||
+      t.includes('杖') || t.includes('锤') || t.includes('斧') || t.includes('匕首') ||
+      t.includes('sword') || t.includes('blade') || t.includes('bow') || t.includes('spear') ||
+      t.includes('staff') || t.includes('dagger') || t.includes('axe') || t.includes('hammer')) return 'weapon'
+  // armor: 防具 / 铠甲 / 头盔 / 盾 / 护甲 / 衣服 / 饰品
+  if (t.includes('防具') || t.includes('铠甲') || t.includes('armor') || t.includes('盔甲') ||
+      t.includes('头盔') || t.includes('盾') || t.includes('护甲') || t.includes('护具') ||
+      t.includes('衣服') || t.includes('饰品') || t.includes('披风') || t.includes('戒指') ||
+      t.includes('项链') || t.includes('手镯') || t.includes('腰带') || t.includes('靴') ||
+      t.includes('helmet') || t.includes('shield') || t.includes('ring') || t.includes('cloak') ||
+      t.includes('boot') || t.includes('belt') || t.includes('amulet')) return 'armor'
+  // consumable: 消耗品 / 药水 / 食物 / 卷轴
+  if (t.includes('消耗') || t.includes('药') || t.includes('consumable') || t.includes('potion') ||
+      t.includes('食物') || t.includes('food') || t.includes('卷轴') || t.includes('scroll') ||
+      t.includes('饮料') || t.includes('drink') || t.includes('酒') || t.includes('果实')) return 'consumable'
+  // material: 材料 / 矿石 / 零件 / 资源
+  if (t.includes('材料') || t.includes('material') || t.includes('零件') || t.includes('矿石') ||
+      t.includes('component') || t.includes('资源') || t.includes('布料') || t.includes('木材') ||
+      t.includes('药草') || t.includes('herb') || t.includes('ore') || t.includes('cloth') ||
+      t.includes('wood') || t.includes('皮革') || t.includes('leather') || t.includes('宝石') ||
+      t.includes('gem') || t.includes('水晶') || t.includes('crystal')) return 'material'
+  // key: 关键物品 / 钥匙 / 通行证 / 令牌
+  if (t.includes('关键') || t.includes('key') || t.includes('钥匙') || t.includes('通行证') ||
+      t.includes('令牌') || t.includes('信物') || t.includes('地图') || t.includes('map') ||
+      t.includes('碎片')) return 'key'
+  // 装备 → 默认归 weapon（AI 常把武器/防具统称为"装备"）
+  if (t.includes('装备') || t.includes('equipment')) return 'weapon'
   return 'other'
 }
 
@@ -54,6 +78,7 @@ function genId(): string {
 // ============================================================
 
 const FAKE_ITEM_PATTERNS: RegExp[] = [
+  // 容器/泛指
   /^新生礼包$/,
   /^礼包$/,
   /^见面礼$/,
@@ -71,6 +96,23 @@ const FAKE_ITEM_PATTERNS: RegExp[] = [
   /^(一大堆|好多|很多|一些|各种|众多|大量).+/,
   /^贵重物品$/,
   /^值钱的东西$/,
+  /^报酬$/,
+  /^赏金$/,
+  /^酬劳$/,
+  /^谢礼$/,
+  // 抽象/概念
+  /^.{0,3}(的|之)(信任|认可|尊重|好感|友谊|爱情|忠诚|承诺|祝福|诅咒|原谅|宽恕|歉意|感谢)$/,
+  /^(信任|认可|尊重|好感|承诺|祝福|诅咒|原谅|宽恕)$/,
+  /^关于.{1,20}的(线索|情报|信息|消息|传闻|谣言)$/,
+  // 经验/技能类
+  /^(战斗|生存| crafting|锻造|炼金|魔法|射击|格斗|潜行)经验$/,
+  /^.{1,10}(技能|能力|天赋)(提升|升级|觉醒|领悟)?$/,
+  // too vague
+  /^.{0,2}(装备|道具|物品|物资|资源|补给)$/,
+  // 货币/金钱 — 这些走 /player/gold，禁止作为物品
+  /^(金币|银币|铜币|金钱?|块钱?|元|G|gold|coin|money|cash)$/i,
+  /^\d+\s*(枚|个)?\s*(金币|银币|铜币|G|gold|coins?)$/i,
+  /^(金币|银币|铜币)\s*[x×]\s*\d+$/i,
 ]
 
 const FAKE_KEYWORDS = new Set([
@@ -78,6 +120,14 @@ const FAKE_KEYWORDS = new Set([
   '信息', '情报', '消息', '线索',
   '机会', '希望', '勇气', '信心', '决心', '信任', '友谊', '爱情',
   '祝福', '诅咒', '命运', '运气',
+  '知识', '智慧', '记忆', '回忆',
+  '力量', '敏捷', '智力', '体力', '精神', '耐力',
+  '学会', '领悟', '掌握', '理解',
+  '一个承诺', '承诺', '约定',
+  // 货币 — 走 /player/gold
+  '金币', '银币', '铜币', '金钱', '钱', '块钱', '元',
+  'gold', 'coin', 'coins', 'money', 'cash', 'G',
+  '教训', '启示', '感悟',
 ])
 
 export function isFakeItem(name: string): boolean {
@@ -85,9 +135,15 @@ export function isFakeItem(name: string): boolean {
   if (!trimmed) return true
   if (trimmed.length > 30) return true // 太长的是描述不是物品名
   if (FAKE_KEYWORDS.has(trimmed)) return true
+  // 也检查名字中包含伪关键词（如"战斗经验"包含"经验"）
+  for (const kw of FAKE_KEYWORDS) {
+    if (trimmed.includes(kw)) return true
+  }
   for (const re of FAKE_ITEM_PATTERNS) {
     if (re.test(trimmed)) return true
   }
+  // 只含标点/空白/emoji → 伪物品
+  if (/^[\s\p{Emoji}\p{Punctuation}，。！？；：""''（）【】《》…—]+$/u.test(trimmed)) return true
   return false
 }
 
@@ -127,12 +183,23 @@ export const usePlayerStore = defineStore('player', () => {
 
   function _findByNameType(name: string, type?: string): InventoryItem | undefined {
     const nt = type ? normalizeType(type) : undefined
-    return inventory.value.find(i => {
+    // 精确匹配：名称 + 类型
+    const exact = inventory.value.find(i => {
       const nameMatch = i.name === name
       if (!nameMatch) return false
       if (nt !== undefined) return i.type === nt
       return true
     })
+    if (exact) return exact
+    // 回退：仅按名称匹配（防止 AI 两次输出 type 不一致导致重复创建）
+    if (nt !== undefined) {
+      const byName = inventory.value.find(i => i.name === name)
+      if (byName) {
+        console.debug(`[wandou] 物品"${name}"类型不匹配（已有:${byName.type}, 新:${nt}），按名称回退匹配，跳过重复创建`)
+        return byName
+      }
+    }
+    return undefined
   }
 
   function _dedupKey(name: string, type?: string): string {
@@ -324,11 +391,23 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   // ---- 任务 ----
-  function addQuest(q: Quest) { quests.value.push(q) }
-  function removeQuest(id: string) { quests.value = quests.value.filter(x => x.id !== id) }
+  function addQuest(q: Quest) {
+    quests.value.push(q)
+    bus.emit('quest:added', q)
+  }
+  function removeQuest(id: string) {
+    const q = quests.value.find(x => x.id === id)
+    if (q) {
+      quests.value = quests.value.filter(x => x.id !== id)
+      bus.emit('quest:removed', q)
+    }
+  }
   function updateQuestStatus(id: string, status: Quest['status']) {
     const q = quests.value.find(x => x.id === id)
-    if (q) q.status = status
+    if (q) {
+      q.status = status
+      bus.emit('quest:updated', q)
+    }
   }
 
   // ---- 回合管理 ----

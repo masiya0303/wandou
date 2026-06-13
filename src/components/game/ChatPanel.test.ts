@@ -22,7 +22,7 @@ describe('ChatPanel', () => {
   it('空态显示提示', () => {
     const w = mount(ChatPanel)
     expect(w.text()).toContain('通讯频道静默中')
-    expect(w.text()).toContain('启程星际冒险')
+    expect(w.text()).toContain('开始冒险')
   })
 
   it('显示 user 和 assistant 消息', async () => {
@@ -86,14 +86,14 @@ describe('ChatPanel', () => {
 
   it('显示用户角色名', async () => {
     const p = usePlayerStore()
-    p.updateCharacter({ name: '星际探险者' })
+    p.updateCharacter({ name: '探险者' })
     const chat = useChatStore()
     chat.messages = [
       { id: 'u1', role: 'user', content: '出发', timestamp: Date.now() },
     ]
     const w = mount(ChatPanel)
     await nextTick()
-    expect(w.text()).toContain('星际探险者')
+    expect(w.text()).toContain('探险者')
   })
 
   it('md() 缓存命中 — 同 id 同内容不重复解析', async () => {

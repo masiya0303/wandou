@@ -1,6 +1,6 @@
 <!-- wandou · 世界详情页 -->
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useGameStore } from '@/stores/gameStore'
 import { useWorldStore } from '@/stores/worldStore'
@@ -11,7 +11,44 @@ import { useWorldBookStore } from '@/stores/worldBookStore'
 import type { WorldBookEntry } from '@/types/worldBook'
 import { importWorldBook } from '@/utils/worldBookEngine'
 import { importNpcJson } from '@/utils/npcEngine'
+import type { WorldTrait } from '@/types/world'
+import type { NpcEntry } from '@/types/npc'
+import NpcDetailModal from '@/components/game/NpcDetailModal.vue'
 import ToggleSwitch from '@/components/ToggleSwitch.vue'
+
+// ---- 世界特征 NPC 属性模板 ----
+const WORLD_TRAIT_TEMPLATES: Record<string, WorldTrait[]> = {
+  '无': [],
+  '异能世界': [
+    { key: '异能', label: '异能·觉醒能力', placeholder: '觉醒的超能力名称与效果' },
+    { key: '异能等级', label: '异能等级', placeholder: 'S/A/B/C/D 级' },
+  ],
+  '咒术世界': [
+    { key: '咒术', label: '咒术', placeholder: '持有的咒术名称与效果' },
+    { key: '咒力等级', label: '咒力等级', placeholder: '特级/一级/二级/三级/四级' },
+    { key: '术式类型', label: '术式类型', placeholder: '如 领域展开/反转术式/束缚术式 等' },
+  ],
+  '现代世界': [
+    { key: '特长', label: '特长', placeholder: '专业技能或商业天赋' },
+    { key: '资源', label: '资源', placeholder: '经济资源/人脉网络/信息渠道' },
+  ],
+  '修仙世界': [
+    { key: '灵根', label: '灵根属性', placeholder: '金/木/水/火/土/变异灵根' },
+    { key: '修为', label: '修为境界', placeholder: '练气/筑基/金丹/元婴/化神' },
+    { key: '功法', label: '主修功法', placeholder: '修炼的功法名称与品阶' },
+  ],
+  '科幻世界': [
+    { key: '义体', label: '义体改造', placeholder: '赛博义体的类型与功能' },
+    { key: '黑客等级', label: '黑客等级', placeholder: '网络入侵能力等级' },
+  ],
+}
+
+const selectedTemplate = ref('无')
+const editTraits = ref<WorldTrait[]>([])
+
+// NPC 详情弹窗
+const detailNpc = ref<NpcEntry | null>(null)
+function openNpcDetail(n: NpcEntry) { detailNpc.value = n }
 
 const router = useRouter()
 const route = useRoute()
@@ -42,8 +79,31 @@ watch(() => route.params.id, async (newId) => {
     await game.enterWorld(newId as string)
     editName.value = world.worldName
     editDesc.value = world.worldDescription
+    editTraits.value = [...(world.currentWorldTraits || [])]
   }
 })
+
+// ---- 世界特征编辑 ----
+function applyTemplate(name: string) {
+  selectedTemplate.value = name
+  editTraits.value = (WORLD_TRAIT_TEMPLATES[name] || []).map(t => ({ ...t }))
+}
+
+function addTrait() {
+  editTraits.value.push({ key: '', label: '', placeholder: '' })
+}
+
+function removeTrait(idx: number) {
+  editTraits.value.splice(idx, 1)
+}
+
+function saveTraits() {
+  editTraits.value = editTraits.value.filter(t => t.key.trim())
+  world.currentWorldTraits = [...editTraits.value]
+  saving.value = true
+  game.syncSave()
+  setTimeout(() => { saving.value = false }, 500)
+}
 
 // ---- 角色卡导入 ----
 const pcJson = ref(''); const showPc = ref(false); const pcFi = ref<HTMLInputElement | null>(null)
@@ -63,13 +123,69 @@ function handleFile(r: string, e: Event) {
 
 function importPc() {
   if (!pcJson.value.trim()) return
-  const r = importNpcJson(pcJson.value)
-  if (r.success && r.entries.length > 0) {
-    const c = r.entries[0]
-    const bg = [c.personality, c.appearance, c.role, c.background].filter(Boolean).join('\n')
-    player.updateCharacter({ name: c.name || '探险者', age: player.character.age, gender: player.character.gender, background: bg || player.character.background })
-    pcJson.value = ''; showPc.value = false
-  } else { error.value = '角色卡导入失败' }
+  let name = ''
+  let content = ''
+  let keys: string[] = []
+
+  try {
+    const data = JSON.parse(pcJson.value)
+
+    // 世界书格式: { name, type: "worldbook", entries: [{ uid, key, comment, content, ... }] }
+    if (data && data.entries && Array.isArray(data.entries) && data.entries.length > 0) {
+      const first = data.entries[0] as any
+      name = data.name?.trim() || ''
+      content = (first.content || first.text || '').trim()
+      keys = Array.isArray(first.key) ? [...first.key] : (typeof first.key === 'string' ? [first.key] : [])
+      // 尝试从 comment 或 content 第一行提取角色名
+      if (!name && first.comment) name = first.comment.replace(/^初始角色[：:]?\s*/i, '').trim()
+      if (!name && content) {
+        const m = content.match(/【玩家角色】(.+)/i) || content.match(/## 角色档案[：:]\s*(.+)/i)
+        if (m) name = m[1].trim()
+      }
+    } else {
+      // 角色卡格式：用 NPC 解析器
+      const r = importNpcJson(pcJson.value)
+      if (r.success && r.entries.length > 0) {
+        const c = r.entries[0]
+        name = c.name
+        content = [
+          c.name ? `【玩家角色】${c.name}` : '',
+          c.role ? `身份：${c.role}` : '',
+          c.personality ? `性格：${c.personality}` : '',
+          c.appearance ? `外貌：${c.appearance}` : '',
+          c.speechStyle ? `说话风格：${c.speechStyle}` : '',
+          c.background || '',
+        ].filter(Boolean).join('\n\n')
+        keys = [c.name, '玩家角色', '主角'].filter(Boolean)
+      }
+    }
+  } catch {
+    error.value = 'JSON 解析失败'
+    return
+  }
+
+  if (!name || !content) {
+    error.value = '未能识别角色信息，请检查 JSON 格式'
+    return
+  }
+
+  player.updateCharacter({ name: name || '探险者', age: player.character.age, gender: player.character.gender, background: content.slice(0, 300) })
+
+  const wbEntry: WorldBookEntry = {
+    id: `pc-${name}`,
+    comment: `玩家角色 · ${name}`,
+    keys: keys.length > 0 ? keys : [name, '玩家角色', '主角'],
+    content,
+    enabled: true,
+    priority: 80,
+    position: 'before',
+  }
+  const oldIdx = wbs.worldBook.findIndex(e => e.id === wbEntry.id)
+  if (oldIdx >= 0) wbs.worldBook[oldIdx] = wbEntry
+  else wbs.worldBook.push(wbEntry)
+
+  pcJson.value = ''; showPc.value = false
+  error.value = ''
 }
 
 function importNpcs() {
@@ -84,6 +200,19 @@ function importWb() {
   const r = importWorldBook(wbJson.value)
   if (r.success && r.entries.length > 0) wbs.addWorldEntries(r.entries)
   wbJson.value = ''; showWb.value = false
+}
+
+// ---- 玩家角色世界书条目 ----
+const pcEntry = computed(() => {
+  const name = player.character.name
+  if (!name) return null
+  return wbs.worldBook.find(e => e.id === `pc-${name}`) || null
+})
+function removePcWb() {
+  if (pcEntry.value) {
+    wbs.removeWorldEntry(pcEntry.value.id)
+    player.updateCharacter({ name: '', background: '' })
+  }
 }
 
 // ---- 世界书条目编辑 ----
@@ -178,10 +307,48 @@ async function goBack() {
       </div>
 
       <div class="sec">
+        <div class="sec-title"><span class="cn">🔮 NPC 属性配置</span><span class="en">NPC TRAITS</span></div>
+        <div class="trait-row">
+          <span class="trait-label">预设模板：</span>
+          <select v-model="selectedTemplate" @change="applyTemplate(($event.target as HTMLSelectElement).value)" class="trait-select">
+            <option v-for="(_, name) in WORLD_TRAIT_TEMPLATES" :key="name" :value="name">{{ name }}</option>
+          </select>
+          <button class="act" @click="saveTraits" :disabled="saving">💾 保存属性</button>
+        </div>
+        <div v-if="editTraits.length === 0 && !saving" class="empty">未配置世界特定属性 — NPC 只使用基础信息字段</div>
+        <div v-for="(t, idx) in editTraits" :key="idx" class="trait-entry">
+          <input v-model="t.key" class="trait-fi" placeholder="字段 key (如 异能)" />
+          <input v-model="t.label" class="trait-fi" placeholder="显示名 (如 异能·觉醒能力)" />
+          <input v-model="t.placeholder" class="trait-fi" placeholder="AI 提示 (如 超能力名称)" />
+          <button class="edel" @click="removeTrait(idx)">✕</button>
+        </div>
+        <button v-if="editTraits.length > 0" class="act" @click="addTrait" style="margin-top:6px">+ 添加属性</button>
+      </div>
+
+      <div class="sec">
         <div class="sec-title"><span class="cn">🎭 玩家角色</span><span class="en">PLAYER</span><span class="badge" v-if="player.character.name">{{ player.character.name }}</span></div>
         <div class="btns"><button class="act" @click="showPc=!showPc">📥 导入</button><button class="act" @click="pcFi?.click()">📁 文件</button><input ref="pcFi" type="file" accept=".json" hidden @change="handleFile('pc',$event)" /></div>
         <div v-if="showPc" class="imp"><textarea v-model="pcJson" class="ita" placeholder="粘贴角色卡 JSON..." rows="2"></textarea><button class="act go" @click="importPc" :disabled="!pcJson.trim()">导入</button></div>
-        <div v-if="player.character.name" class="char-card"><span class="cc-name">{{ player.character.name }}</span><p v-if="player.character.background" class="cc-bg">{{ player.character.background }}</p></div>
+        <!-- PC 世界书条目 -->
+        <div v-if="pcEntry" :class="['entry',{off:!pcEntry.enabled}]">
+          <div class="er">
+            <ToggleSwitch :modelValue="pcEntry.enabled" @update:modelValue="wbs.toggleWorldEntry(pcEntry.id)" />
+            <div class="ei" style="flex:1;min-width:0;cursor:pointer" @click="editingWbId===pcEntry.id?cancelEditWb():startEditWb(pcEntry)">
+              <span class="enm">{{pcEntry.comment||pcEntry.keys[0]||'未命名'}}</span>
+              <span style="font-size:10px;color:var(--theme-text-main);opacity:0.5">{{pcEntry.keys.slice(0,3).join(' / ')}}{{pcEntry.keys.length>3?'...':''}}</span>
+            </div>
+            <span class="pri">{{pcEntry.position==='at_constant'?'📌':'#'+pcEntry.priority}}</span>
+            <button class="edl" @click="editingWbId===pcEntry.id?cancelEditWb():startEditWb(pcEntry)">{{editingWbId===pcEntry.id?'✕':'✏️'}}</button>
+            <button class="edel" @click="removePcWb">🗑️</button>
+          </div>
+          <div v-if="editingWbId===pcEntry.id" class="edit-row">
+            <input v-model="editWbComment" class="edit-fi" placeholder="条目名称" />
+            <input v-model="editWbKeys" class="edit-fi" placeholder="关键词，逗号分隔" />
+            <textarea v-model="editWbContent" class="edit-ta" rows="16" placeholder="内容..."></textarea>
+            <div class="edit-btns"><button class="edit-save" @click="saveEditWb">💾 保存</button><span class="edit-hint">关键词逗号分隔</span></div>
+          </div>
+          <p v-else class="ep">{{ pcEntry.content.slice(0, 300) }}{{ pcEntry.content.length > 300 ? '…' : '' }}</p>
+        </div>
         <div v-else class="empty">导入角色卡 JSON 设置玩家角色</div>
       </div>
 
@@ -191,7 +358,7 @@ async function goBack() {
         <div v-if="showNpc" class="imp"><textarea v-model="npcJson" class="ita" placeholder="粘贴 NPC JSON..." rows="2"></textarea><button class="act go" @click="importNpcs" :disabled="!npcJson.trim()">导入</button></div>
         <div v-if="npc.npcs.length===0" class="empty">暂无 NPC</div>
         <div v-for="n in npc.npcs" :key="n.id" :class="['entry',{off:!n.enabled}]">
-          <div class="er"><ToggleSwitch :modelValue="n.enabled" @update:modelValue="npc.toggle(n.id)" /><div class="ei"><span class="enm">{{n.name}}</span><span v-if="n.role" class="erl">{{n.role}}</span></div><button class="edel" @click="npc.remove(n.id)">🗑️</button></div>
+          <div class="er"><ToggleSwitch :modelValue="n.enabled" @update:modelValue="npc.toggle(n.id)" /><div class="ei" style="cursor:pointer" @click="openNpcDetail(n)"><span class="enm">{{n.name}}</span><span v-if="n.role" class="erl">{{n.role}}</span></div><button class="edel" @click="npc.remove(n.id)">🗑️</button></div>
         </div>
       </div>
 
@@ -199,8 +366,8 @@ async function goBack() {
         <div class="sec-title"><span class="cn">📖 世界书</span><span class="en">WORLD BOOK</span><ToggleSwitch style="margin-left:auto" :modelValue="wbs.worldBookEnabled" @update:modelValue="wbs.worldBookEnabled = $event" /></div>
         <div class="btns"><button class="act" @click="showWb=!showWb">📥 导入</button><button class="act" @click="wbFi?.click()">📁 文件</button><input ref="wbFi" type="file" accept=".json" hidden @change="handleFile('wb',$event)" /></div>
         <div v-if="showWb" class="imp"><textarea v-model="wbJson" class="ita" placeholder="粘贴世界书 JSON..." rows="2"></textarea><button class="act go" @click="importWb" :disabled="!wbJson.trim()">导入</button></div>
-        <div v-if="wbs.worldBook.length===0" class="empty">暂无世界书条目</div>
-        <div v-for="e in wbs.worldBook" :key="e.id" :class="['entry',{off:!e.enabled}]">
+        <div v-if="wbs.worldBook.filter(x => !x.id.startsWith('pc-')).length===0" class="empty">暂无世界书条目</div>
+        <div v-for="e in wbs.worldBook.filter(x => !x.id.startsWith('pc-'))" :key="e.id" :class="['entry',{off:!e.enabled}]">
           <div class="er">
             <ToggleSwitch :modelValue="e.enabled" @update:modelValue="wbs.toggleWorldEntry(e.id)" />
             <div class="ei" style="flex:1;min-width:0"><span class="enm">{{e.comment||'未命名'}}</span><span style="font-size:10px;color:var(--theme-text-main);opacity:0.5">{{e.keys.slice(0,3).join(' / ')}}{{e.keys.length>3?'...':''}}</span></div>
@@ -211,10 +378,10 @@ async function goBack() {
           <div v-if="editingWbId===e.id" class="edit-row">
             <input v-model="editWbComment" class="edit-fi" placeholder="条目名称" />
             <input v-model="editWbKeys" class="edit-fi" placeholder="关键词，逗号分隔" />
-            <textarea v-model="editWbContent" class="edit-ta" rows="4" placeholder="内容..."></textarea>
+            <textarea v-model="editWbContent" class="edit-ta" rows="16" placeholder="内容..."></textarea>
             <div class="edit-btns"><button class="edit-save" @click="saveEditWb">💾 保存</button><span class="edit-hint">关键词逗号分隔</span></div>
           </div>
-          <p v-else class="ep">{{e.content.slice(0,80)}}{{e.content.length>80?'...':''}}</p>
+          <p v-else class="ep">{{ e.content.slice(0, 300) }}{{ e.content.length > 300 ? '…' : '' }}</p>
         </div>
       </div>
 
@@ -230,13 +397,16 @@ async function goBack() {
         <button class="btn-del" @click="handleDeleteWorld">🗑️ 删除世界</button>
       </div>
     </div>
+
+    <!-- NPC 详情弹窗 -->
+    <NpcDetailModal v-if="detailNpc" :npc="detailNpc" @close="detailNpc = null" />
   </div>
 </template>
 
 <style scoped>
 .screen { height: 100vh; position: relative; overflow-y: auto; overflow-x: hidden; background: var(--theme-chat-bg) center/cover no-repeat; }
 .container { position: relative; z-index: 1; max-width: 640px; width: 100%; margin: 0 auto; padding: 16px 18px 32px; display: flex; flex-direction: column; gap: 10px; }
-.top { display: flex; align-items: center; justify-content: space-between; }
+.top { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
 .top h1 { font-size: 20px; color: #e0e8ff; margin: 0; }
 .btn-back { padding: 6px 14px; border-radius: 9999px; border: 1px solid var(--theme-border-ice); background: rgba(255,255,255,0.5); color: var(--theme-text-main); font-size: 13px; cursor: pointer; font-family: inherit; }
 .btn-back:disabled { opacity: 0.4; }
@@ -262,10 +432,6 @@ async function goBack() {
 .imp { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; padding: 8px; background: rgba(255,255,255,0.4); border-radius: 10px; }
 .ita { width: 100%; padding: 6px 8px; border: 1px solid var(--theme-border-ice); border-radius: 8px; background: rgba(255,255,255,0.5); color: var(--theme-text-main); font-size: 12px; font-family: monospace; resize: vertical; box-sizing: border-box; }
 
-.char-card { padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,0.5); }
-.cc-name { font-size: 14px; font-weight: 600; color: var(--theme-text-main); }
-.cc-bg { font-size: 12px; color: var(--theme-text-main); opacity: 0.65; line-height: 1.5; margin: 4px 0 0; white-space: pre-wrap; }
-
 .empty { text-align: center; padding: 8px; font-size: 12px; color: var(--theme-text-main); opacity: 0.4; }
 .entry { padding: 6px 8px; border-radius: 10px; background: rgba(255,255,255,0.4); margin-bottom: 4px; transition: transform 0.2s; }
 .entry:active { transform: scale(0.98); }
@@ -283,13 +449,13 @@ async function goBack() {
 .edit-row { margin-top: 8px; padding-left: 24px; display: flex; flex-direction: column; gap: 6px; }
 .edit-fi { width: 100%; padding: 5px 8px; border: 1px solid var(--theme-border-ice); border-radius: 6px; background: rgba(255,255,255,0.7); color: var(--theme-text-main); font-size: 12px; font-family: inherit; box-sizing: border-box; }
 .edit-fi:focus { outline: none; border-color: var(--theme-text-accent); }
-.edit-ta { width: 100%; padding: 6px 8px; border: 1px solid var(--theme-border-ice); border-radius: 6px; background: rgba(255,255,255,0.7); color: var(--theme-text-main); font-size: 12px; font-family: monospace; resize: vertical; box-sizing: border-box; min-height: 60px; }
+.edit-ta { width: 100%; padding: 6px 8px; border: 1px solid var(--theme-border-ice); border-radius: 6px; background: rgba(255,255,255,0.7); color: var(--theme-text-main); font-size: 12px; font-family: monospace; resize: vertical; box-sizing: border-box; min-height: 300px; }
 .edit-ta:focus { outline: none; border-color: var(--theme-text-accent); }
 .edit-btns { display: flex; align-items: center; gap: 8px; }
 .edit-save { padding: 4px 12px; border: none; border-radius: 6px; background: var(--theme-text-accent); color: #fff; font-size: 12px; cursor: pointer; font-family: inherit; }
 .edit-save:active { transform: scale(0.96); }
 .edit-hint { font-size: 10px; color: var(--theme-text-main); opacity: 0.4; }
-.ep { font-size: 11px; color: var(--theme-text-main); opacity: 0.55; margin: 4px 0 0; padding-left: 24px; line-height: 1.4; }
+.ep { font-size: 11px; color: var(--theme-text-main); opacity: 0.55; margin: 4px 0 0; padding-left: 24px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; max-height: 200px; overflow: hidden; }
 .err { color: #e55; font-size: 12px; text-align: center; margin: 0; }
 
 .bottom { display: flex; flex-direction: column; gap: 8px; align-items: center; padding-top: 8px; }
@@ -302,4 +468,11 @@ async function goBack() {
 .btn-exp:active { background: var(--theme-border-ice); }
 .btn-del { padding: 6px 16px; border: 1px solid #ecc; border-radius: 9999px; background: transparent; color: #c88; font-size: 12px; cursor: pointer; font-family: inherit; }
 .btn-del:active { background: rgba(200,80,80,0.1); }
+/* traits */
+.trait-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.trait-label { font-size: 12px; color: var(--theme-text-main); opacity: 0.7; }
+.trait-select { padding: 4px 10px; border: 1px solid var(--theme-border-ice); border-radius: 8px; font-size: 12px; font-family: inherit; color: var(--theme-text-main); background: rgba(255,255,255,0.7); }
+.trait-entry { display: flex; gap: 4px; margin-bottom: 4px; align-items: center; }
+.trait-fi { flex: 1; min-width: 0; padding: 4px 8px; border: 1px solid var(--theme-border-ice); border-radius: 6px; font-size: 11px; font-family: inherit; color: var(--theme-text-main); background: rgba(255,255,255,0.7); }
+.trait-fi::placeholder { color: var(--theme-text-main); opacity: 0.3; }
 </style>

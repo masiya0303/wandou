@@ -4,7 +4,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { ApiConfig } from '@/types/game'
-import type { World, WorldMeta } from '@/types/world'
+import type { World, WorldMeta, WorldTrait } from '@/types/world'
 import { storage } from '@/utils/storage'
 import { bus } from '@/utils/events'
 import { usePlayerStore } from './playerStore'
@@ -18,6 +18,8 @@ export const useWorldStore = defineStore('world', () => {
   const currentWorldId = ref<string | null>(null)
   const worldName = ref('')
   const worldDescription = ref('')
+  /** 当前世界特定的 NPC 属性定义 */
+  const currentWorldTraits = ref<WorldTrait[]>([])
 
   // ---- 初始化 ----
   function initWorldList() {
@@ -97,7 +99,7 @@ export const useWorldStore = defineStore('world', () => {
   }
 
   return {
-    worldList, currentWorldId, worldName, worldDescription,
+    worldList, currentWorldId, worldName, worldDescription, currentWorldTraits,
     initWorldList, createWorld, updateWorldInfo, deleteWorld,
     updateMeta, saveWorldMeta, getWorldSave, resetCurrent,
   }

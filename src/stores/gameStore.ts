@@ -31,7 +31,7 @@ export const useGameStore = defineStore('game', () => {
     const wbs = useWorldBookStore()
     const ws = useWorldStore()
 
-    wbs.initGlobalBook()
+    wbs.repairGlobalBook()
     ws.initWorldList()
 
     // 默认粉色主题已在 style.css 中，这里只恢复用户导入的自定义主题
@@ -56,6 +56,7 @@ export const useGameStore = defineStore('game', () => {
     ws.currentWorldId = w.id
     ws.worldName = w.name
     ws.worldDescription = w.description
+    ws.currentWorldTraits = w.worldTraits || []
     ps.restore({ character: w.character, inventory: w.inventory || [], quests: w.quests || [] })
     ns.restore(w.npcs || [])
     cs.restore(w.messages || [])
@@ -97,6 +98,7 @@ export const useGameStore = defineStore('game', () => {
       messages: cs.messages,
       worldBook: wbs.worldBook,
       worldBookEnabled: wbs.worldBookEnabled,
+      worldTraits: ws.currentWorldTraits,
       stateData: ss.snapshot(),
     }
 
