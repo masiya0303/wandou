@@ -178,10 +178,6 @@ export const useStateStore = defineStore('state', () => {
   }
 
   // ---- 回合 ----
-  function advanceTurn() {
-    turnIndex.value++
-  }
-
   // ============================================================
   // 统一状态树（yijiekkk-style）— AI 变量操作的 transient view
   // ============================================================
@@ -379,9 +375,24 @@ export const useStateStore = defineStore('state', () => {
     npcRelations?: NpcRelation[]
     turnIndex?: number
   }) {
-    if (data.worldTime) worldTime.value = data.worldTime
-    if (data.currentLocation) currentLocation.value = { ...data.currentLocation }
-    if (data.weather) weather.value = data.weather
+    if (data.worldTime) {
+      // 格式校验（不检查时间倒流，因为恢复存档本身就是"回到过去"）
+      const t = String(data.worldTime).trim()
+      if (parseWorldTimeString(t)) {
+        worldTime.value = t
+        bus.emit('state:world_changed', { field: 'worldTime', value: t })
+      } else {
+        console.warn('[wandou] 存档世界时间格式无效，已保留当前值:', data.worldTime)
+      }
+    }
+    if (data.currentLocation) {
+      currentLocation.value = { ...data.currentLocation }
+      bus.emit('state:world_changed', { field: 'location', value: currentLocation.value })
+    }
+    if (data.weather) {
+      weather.value = data.weather
+      bus.emit('state:world_changed', { field: 'weather', value: data.weather })
+    }
     if (data.worldEvents) worldEvents.value = data.worldEvents
     if (data.memories) memories.value = data.memories
     if (data.npcRelations) npcRelations.value = data.npcRelations
@@ -389,7 +400,7 @@ export const useStateStore = defineStore('state', () => {
   }
 
   function resetState() {
-    worldTime.value = ' 2157年 01月 01日 08:00'
+    worldTime.value = '2157年 01月 01日 08:00'
     currentLocation.value = { ...DEFAULT_LOCATION }
     weather.value = '晴朗'
     worldEvents.value = []
@@ -407,7 +418,7 @@ export const useStateStore = defineStore('state', () => {
     setWorldTime, setLocation, setWeather, locationString,
     addWorldEvent, updateWorldEvent, removeWorldEvent,
     addMemory, addMemories, pruneMemories,
-    upsertNpcRelation, advanceTurn,
+    upsertNpcRelation,
     // unified state tree
     getUnifiedState, commitUnifiedState,
     // persistence

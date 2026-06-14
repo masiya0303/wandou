@@ -8,6 +8,7 @@
 // ============================================================
 
 import type { Quest } from '@/types/world'
+import type { NpcEntry } from '@/types/npc'
 import { usePlayerStore } from '@/stores/playerStore'
 import { useNpcStore } from '@/stores/npcStore'
 import { useStateStore } from '@/stores/stateStore'
@@ -115,10 +116,6 @@ export function parseOperations(raw: string): VarOperation[] {
 
   if (wasTruncated && Array.isArray(data)) {
     console.warn('[wandou] ⚠️ 截断修复：原始 ' + trimmed.length + ' 字符，恢复了 ' + data.length + ' 个操作（可能丢失了最后几个）')
-  }
-
-  if (data === null) {
-    return parseLooseOperations(raw)
   }
 
   if (Array.isArray(data)) {

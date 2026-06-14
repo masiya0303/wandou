@@ -15,6 +15,7 @@ export interface WorldBookEntry {
   // before: 注入在 system prompt 之前
   // after: 注入在 system prompt 之后
   // at_constant: 始终注入（不受关键词匹配影响）
+  group?: string       // 分组名（导入 SPreset 时自动生成，UI 按分组折叠显示）
 }
 
 /** 导入 JSON 时容错的原始条目格式（id 和 enabled 可选） */

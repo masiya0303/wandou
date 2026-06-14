@@ -119,6 +119,38 @@ const filteredWbEntries = computed(() => {
   return entries.filter(e => matchWbEntry(e, q))
 })
 
+/** 将条目按 group 分组，无分组的归入 "ungrouped" */
+interface WbGroup { name: string; entries: WorldBookEntry[] }
+const groupedWbEntries = computed(() => {
+  const groups = new Map<string, WorldBookEntry[]>()
+  const ungrouped: WorldBookEntry[] = []
+  for (const e of filteredWbEntries.value) {
+    if (e.group) {
+      if (!groups.has(e.group)) groups.set(e.group, [])
+      groups.get(e.group)!.push(e)
+    } else {
+      ungrouped.push(e)
+    }
+  }
+  const result: WbGroup[] = []
+  // 有分组的按组名排
+  for (const [name, entries] of [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    result.push({ name, entries })
+  }
+  // 无分组的放最前面
+  if (ungrouped.length > 0) result.unshift({ name: '', entries: ungrouped })
+  return result
+})
+
+// 记录折叠的组（组名 → true 表示折叠）
+const collapsedGroups = ref<Set<string>>(new Set())
+function toggleGroup(name: string) {
+  if (collapsedGroups.value.has(name)) collapsedGroups.value.delete(name)
+  else collapsedGroups.value.add(name)
+  // 触发响应式
+  collapsedGroups.value = new Set(collapsedGroups.value)
+}
+
 function openBook(target: string) {
   if (target === 'regex') {
     if (!extStore.isEnabled('regex')) return
@@ -295,28 +327,45 @@ const POS_LABELS: Record<string, string> = {
               </div>
             </div>
           </template>
-          <!-- 世界书条目 -->
+          <!-- 世界书条目（支持分组折叠） -->
           <template v-else>
-            <div
-              v-for="e in filteredWbEntries"
-              :key="e.id"
-              :class="['card', { off: !e.enabled }]"
-              @click="openEditWb(e)"
-            >
-              <div class="r1">
-                <ToggleSwitch :modelValue="e.enabled" @update:modelValue="toggle(e.id)" @click.stop />
-                <div class="i">
-                  <span class="nm">{{ e.comment || '（未命名条目）' }}</span>
-                  <div class="ks">
-                    <span v-for="k in e.keys?.slice(0, 5)" :key="k" class="kt">{{ k }}</span>
-                    <span v-if="e.keys?.length > 5" class="kt">+{{ e.keys.length - 5 }}</span>
-                  </div>
-                </div>
-                <span class="pri">{{ e.position === 'at_constant' ? '📌' : '#' + e.priority }}</span>
-                <button class="del" @click.stop="remove(e.id)">🗑️</button>
+            <template v-for="g in groupedWbEntries" :key="g.name || '__none__'">
+              <!-- 分组标题 -->
+              <div
+                v-if="g.name"
+                class="group-header"
+                @click="toggleGroup(g.name)"
+              >
+                <span class="gh-arrow">{{ collapsedGroups.has(g.name) ? '▶' : '▼' }}</span>
+                <span class="gh-icon">📁</span>
+                <span class="gh-name">{{ g.name }}</span>
+                <span class="gh-count">{{ g.entries.filter(e => e.enabled).length }}/{{ g.entries.length }}</span>
+                <button class="gh-del" @click.stop="g.entries.forEach(e => remove(e.id))" title="删除整个分组">✕</button>
               </div>
-              <p class="pre">{{ e.content?.slice(0, 100) }}{{ e.content?.length > 100 ? '...' : '' }}</p>
-            </div>
+              <!-- 分组内容 -->
+              <template v-if="!g.name || !collapsedGroups.has(g.name)">
+                <div
+                  v-for="e in g.entries"
+                  :key="e.id"
+                  :class="['card', { off: !e.enabled }]"
+                  @click="openEditWb(e)"
+                >
+                  <div class="r1">
+                    <ToggleSwitch :modelValue="e.enabled" @update:modelValue="toggle(e.id)" @click.stop />
+                    <div class="i">
+                      <span class="nm">{{ e.comment || '（未命名条目）' }}</span>
+                      <div class="ks">
+                        <span v-for="k in e.keys?.slice(0, 5)" :key="k" class="kt">{{ k }}</span>
+                        <span v-if="e.keys?.length > 5" class="kt">+{{ e.keys.length - 5 }}</span>
+                      </div>
+                    </div>
+                    <span class="pri">{{ e.position === 'at_constant' ? '📌' : '#' + e.priority }}</span>
+                    <button class="del" @click.stop="remove(e.id)">🗑️</button>
+                  </div>
+                  <p class="pre">{{ e.content?.slice(0, 100) }}{{ e.content?.length > 100 ? '...' : '' }}</p>
+                </div>
+              </template>
+            </template>
           </template>
         </div>
       </div>
@@ -421,6 +470,28 @@ const POS_LABELS: Record<string, string> = {
 .bk-meta { font-size: 11px; color: var(--theme-text-main); opacity: 0.5; }
 .bk-arrow { font-size: 14px; color: var(--theme-text-main); opacity: 0.35; transition: all 0.3s; }
 .book-card:active .bk-arrow { opacity: 0.8; transform: translateX(4px); }
+
+/* ---- 分组标题 ---- */
+.group-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; margin-top: 8px;
+  border-radius: 12px; cursor: pointer;
+  background: rgba(255,128,168,0.06);
+  border: 1px solid rgba(255,128,168,0.15);
+  transition: all 0.2s;
+  user-select: none;
+}
+.group-header:active { background: rgba(255,128,168,0.12); }
+.gh-arrow { font-size: 10px; color: var(--theme-text-accent); width: 14px; text-align: center; }
+.gh-icon { font-size: 16px; }
+.gh-name { flex: 1; font-size: 14px; font-weight: 600; color: var(--theme-text-main); }
+.gh-count { font-size: 11px; color: var(--theme-text-main); opacity: 0.45; }
+.gh-del {
+  background: none; border: none; cursor: pointer;
+  font-size: 12px; color: var(--theme-text-main); opacity: 0.25;
+  padding: 2px 6px; border-radius: 4px;
+}
+.gh-del:active { opacity: 0.8; background: rgba(255,0,0,0.1); }
 
 /* ---- 条目视图 ---- */
 .entry-view { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 10px; padding: 0 2px; }

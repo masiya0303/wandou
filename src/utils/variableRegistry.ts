@@ -454,7 +454,7 @@ export function validateValue(def: VarDef, rawValue: any): ValidationResult {
 // ============================================================
 
 /** 模板占位符 → 替换值 */
-export interface PromptTemplateVars {
+interface PromptTemplateVars {
   '{{STATUS}}': string           // 完整变量快照
   '{{NPCS}}': string             // NPC 列表（含 ID）
   '{{NPC_IDS}}': string          // NPC ID 列表
@@ -470,7 +470,7 @@ export interface PromptTemplateVars {
 }
 
 /** 默认变量协议模板 */
-export const DEFAULT_PROTOCOL_TEMPLATE = `=== 0) 当前状态 ===
+const DEFAULT_PROTOCOL_TEMPLATE = `=== 0) 当前状态 ===
 背包：{{INVENTORY}}
 任务：{{QUESTS}}
 金币：{{GOLD}} | 时间：{{TIME}} | 位置：{{LOCATION}} | 天气：{{WEATHER}}

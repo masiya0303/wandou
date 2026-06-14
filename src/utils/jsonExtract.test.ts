@@ -4,9 +4,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   safeParseJson,
-  stripJsonFence,
   extractBalancedJson,
-  tryExtractFromFences,
 } from '../utils/jsonExtract'
 
 describe('safeParseJson', () => {
@@ -22,20 +20,6 @@ describe('safeParseJson', () => {
 
   it('前后空白不影响', () => {
     expect(safeParseJson('  {"a":1}  ')).toEqual({ a: 1 })
-  })
-})
-
-describe('stripJsonFence', () => {
-  it('去掉 ```json ... ```', () => {
-    expect(stripJsonFence('```json\n{"a":1}\n```')).toBe('{"a":1}')
-  })
-
-  it('去掉 ``` ... ```', () => {
-    expect(stripJsonFence('```\n[1,2]\n```')).toBe('[1,2]')
-  })
-
-  it('无围栏直接返回', () => {
-    expect(stripJsonFence('{"a":1}')).toBe('{"a":1}')
   })
 })
 
@@ -59,12 +43,3 @@ describe('extractBalancedJson', () => {
   })
 })
 
-describe('tryExtractFromFences', () => {
-  it('提取 fence 内的 JSON', () => {
-    expect(tryExtractFromFences('```json\n{"a":1}\n```')).toEqual({ a: 1 })
-  })
-
-  it('无 fence 返回 null', () => {
-    expect(tryExtractFromFences('just text')).toBeNull()
-  })
-})

@@ -5,20 +5,24 @@
 // 变量解析和路由已统一到 variableEngine.ts。
 // ============================================================
 
-import type {
-  WorldSnapshot, PlayerSnapshot, NpcSnapshot,
-} from '@/types/state'
 import { useStateStore } from '@/stores/stateStore'
 import { usePlayerStore } from '@/stores/playerStore'
 import { useNpcStore } from '@/stores/npcStore'
 
-// ============================================================
-// 快照构建（发给 AI 的当前状态）
-// ============================================================
-
-export function buildWorldSnapshot(): WorldSnapshot {
+/** 构建发给 AI 的完整状态快照 */
+export function buildFullStateSnapshot(): {
+  worldJson: string
+  playerJson: string
+  npcJson: string
+  memoryContext: string
+} {
   const state = useStateStore()
-  return {
+  const player = usePlayerStore()
+  const npc = useNpcStore()
+  const char = player.character
+
+  // world
+  const worldSnapshot = {
     timeString: state.worldTime,
     location: state.currentLocation,
     weather: state.weather,
@@ -28,12 +32,9 @@ export function buildWorldSnapshot(): WorldSnapshot {
       status: e.status,
     })),
   }
-}
 
-export function buildPlayerSnapshot(): PlayerSnapshot {
-  const player = usePlayerStore()
-  const char = player.character
-  return {
+  // player
+  const playerSnapshot = {
     name: char.name,
     gender: char.gender,
     age: char.age,
@@ -52,12 +53,10 @@ export function buildPlayerSnapshot(): PlayerSnapshot {
       status: q.status,
     })),
   }
-}
 
-export function buildNpcSnapshot(limit: number = 15): NpcSnapshot[] {
-  const npc = useNpcStore()
-  return npc.getActiveNpcs()
-    .slice(0, limit)
+  // npc
+  const npcSnapshot = npc.getActiveNpcs()
+    .slice(0, 15)
     .map((n) => ({
       id: n.id,
       name: n.name,
@@ -68,38 +67,28 @@ export function buildNpcSnapshot(limit: number = 15): NpcSnapshot[] {
       currentHp: n.currentHp,
       maxHp: n.maxHp,
     }))
-}
 
-export function buildMemoryContext(): string {
-  const state = useStateStore()
-  if (state.memories.length === 0) return ''
-
-  const relevant = [...state.memories]
-    .filter(m => m.state === 'active' || m.state === 'unknown')
-    .sort((a, b) => b.importance - a.importance)
-    .slice(0, 10)
-
-  if (relevant.length === 0) return ''
-
-  const lines = ['【重要历史记录】']
-  for (const m of relevant) {
-    lines.push(`- [${m.category}] ${m.fact}`)
+  // memory
+  let memoryContext = ''
+  if (state.memories.length > 0) {
+    const relevant = [...state.memories]
+      .filter(m => m.state === 'active' || m.state === 'unknown')
+      .sort((a, b) => b.importance - a.importance)
+      .slice(0, 10)
+    if (relevant.length > 0) {
+      const lines = ['【重要历史记录】']
+      for (const m of relevant) {
+        lines.push(`- [${m.category}] ${m.fact}`)
+      }
+      memoryContext = lines.join('\n')
+    }
   }
-  return lines.join('\n')
-}
 
-/** 构建发给 AI 的完整状态快照 JSON */
-export function buildFullStateSnapshot(): {
-  worldJson: string
-  playerJson: string
-  npcJson: string
-  memoryContext: string
-} {
   return {
-    worldJson: JSON.stringify(buildWorldSnapshot(), null, 2),
-    playerJson: JSON.stringify(buildPlayerSnapshot(), null, 2),
-    npcJson: JSON.stringify(buildNpcSnapshot(), null, 2),
-    memoryContext: buildMemoryContext(),
+    worldJson: JSON.stringify(worldSnapshot, null, 2),
+    playerJson: JSON.stringify(playerSnapshot, null, 2),
+    npcJson: JSON.stringify(npcSnapshot, null, 2),
+    memoryContext,
   }
 }
 
@@ -135,14 +124,4 @@ export function stripStateTags(text: string): string {
   cleaned = cleaned.replace(/```(?:json)?\s*\n?\s*\{[\s\S]*?"timeString"[\s\S]*?\}\s*\n?\s*```/gi, '')
 
   return cleaned.replace(/\n{3,}/g, '\n\n').trim()
-}
-
-// ============================================================
-// 变更摘要（基于 VarResult）
-// ============================================================
-
-// 注意：此函数保留给 UI 使用，
-// import type { VarResult } from './variableEngine' 如有循环引用可在调用处自行拼接
-export function buildChangeSummary(summaries: string[]): string {
-  return summaries.slice(0, 5).join('；') || ''
 }

@@ -103,17 +103,69 @@ export function importWorldBook(jsonStr: string): ImportResult & { entries: Worl
     return { success: false, imported: 0, errors: [`JSON 解析失败: ${e.message}`], entries: [] }
   }
 
-  // 支持多种格式：数组 / { entries: [...] } / { scripts: [...] } / 单个对象
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return { success: false, imported: 0, errors: ['JSON 格式错误'], entries: [] }
+  }
+
+  const root = data as Record<string, any>
+
+  // ================================================================
+  // 🎭 检测 SillyTavern SPreset 格式 → 转换为世界书分组
+  // ================================================================
+  if (Array.isArray(root.prompts)) {
+    const rawName = String(root.name || '').trim()
+    // 清理重复前缀（如 "预设_预设_..." → "预设_"），截断过长的名字
+    const cleanName = rawName
+      .replace(/^(预设[ _])+/, '预设_')
+      .replace(/_\d{4}-\d{2}-\d{2}.*$/, '')
+      .slice(0, 60)
+    const groupName = cleanName || '导入的 SPreset'
+
+    const entries: WorldBookEntry[] = []
+
+    for (let i = 0; i < root.prompts.length; i++) {
+      const p = root.prompts[i]
+      if (!p || typeof p !== 'object') { errors.push(`prompts[${i}]: 无效条目`); continue }
+
+      const content = (p.content || '').trim()
+      if (!content || content.length < 3) { errors.push(`prompts[${i}]: ${p.name || '(无名)'} — 内容过短，跳过`); continue }
+
+      const entryName = (p.name || p.identifier || '').trim()
+      // 从条目名称中摘取关键词
+      const nameKey = entryName.replace(/^[🔹🔵🟡🔴🟢💬🔸🏮✍️💠🎞️💙▶📖📘⚙️🗡️🛡️🌟✨💢🩸]/u, '').trim().slice(0, 30)
+      const keys = nameKey ? [nameKey] : []
+
+      entries.push({
+        id: genId(),
+        keys,
+        content,
+        comment: entryName || '(无名)',
+        enabled: p.enabled !== false,
+        priority: p.injection_position === 0 ? 95 : 50,
+        position: 'at_constant',
+        group: groupName,
+      })
+    }
+
+    return {
+      success: entries.length > 0,
+      imported: entries.length,
+      errors,
+      entries,
+    }
+  }
+
+  // ================================================================
+  // 原有格式：数组 / { entries } / { scripts } / 单个对象
+  // ================================================================
   let rawArr: RawWorldBookEntry[]
   if (Array.isArray(data)) {
     rawArr = data
-  } else if (data && typeof data === 'object') {
-    const d = data as any
+  } else {
+    const d = root
     if (Array.isArray(d.entries)) rawArr = d.entries
     else if (Array.isArray(d.scripts)) rawArr = d.scripts
-    else rawArr = [d as RawWorldBookEntry] // 单个对象
-  } else {
-    return { success: false, imported: 0, errors: ['JSON 格式错误'], entries: [] }
+    else rawArr = [d as RawWorldBookEntry]
   }
 
   const entries: WorldBookEntry[] = []
@@ -134,10 +186,9 @@ export function importWorldBook(jsonStr: string): ImportResult & { entries: Worl
       const rawContent = (raw.content || raw.text || '').trim()
       if (!rawContent) { errors.push(`#${i + 1}: ST 脚本缺少 content`); continue }
 
-      // 剥离 {{setvar::push::\n...\n}} 或 {{setvar::X::...}} 包装
       let stContent = rawContent
-        .replace(/\{\{setvar::\w+::\s*/gi, '')  // 去掉开头 {{setvar::push::
-        .replace(/\s*\}\}\s*$/g, '')              // 去掉末尾 }}
+        .replace(/\{\{setvar::\w+::\s*/gi, '')
+        .replace(/\s*\}\}\s*$/g, '')
         .trim()
 
       if (!stContent) { errors.push(`#${i + 1}: ST 脚本内容为空`); continue }
@@ -170,7 +221,6 @@ export function importWorldBook(jsonStr: string): ImportResult & { entries: Worl
     const content = (raw.content || raw.text || '').trim()
     if (!content) { errors.push(`#${i + 1}: 缺少 content`); continue }
 
-    // position: 兼容 constant:true / always:true → at_constant
     let pos: 'before' | 'after' | 'at_constant' = 'after'
     if (raw.constant === true || raw.always === true || (typeof raw.constant === 'number' && raw.constant > 0)) {
       pos = 'at_constant'
@@ -178,12 +228,13 @@ export function importWorldBook(jsonStr: string): ImportResult & { entries: Worl
       pos = raw.position
     }
 
-    // priority: 兼容 order 字段（1-10 → 10-100）、probability
     let pri = 50
     if (typeof raw.priority === 'number') pri = raw.priority
     else if (typeof raw.order === 'number') pri = raw.order * 10
     else if (typeof raw.probability === 'number') pri = raw.probability
     pri = Math.max(0, Math.min(100, pri))
+
+    const group = (raw.group as string | undefined) || undefined
 
     entries.push({
       id: genId(),
@@ -193,6 +244,7 @@ export function importWorldBook(jsonStr: string): ImportResult & { entries: Worl
       enabled: raw.enabled !== false && raw.hidden !== true,
       priority: pri,
       position: pos,
+      ...(group ? { group } : {}),
     })
   }
 

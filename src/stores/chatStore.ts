@@ -151,7 +151,7 @@ export const useChatStore = defineStore('chat', () => {
         memorySyncEnabled: memorySyncEnabled.value,
         messages: messages.value,
       })
-      const systemPrompt = api.buildFullSystemPrompt(contextParts)
+      const systemPrompt = api.buildSystemPrompt(contextParts)
 
       aiMsg.content = await chatStream(
         api.apiConfig,
@@ -200,7 +200,7 @@ export const useChatStore = defineStore('chat', () => {
               memorySyncEnabled: memorySyncEnabled.value,
               messages: messages.value,
             })
-            const retrySystemPrompt = api.buildFullSystemPrompt(retryContextParts)
+            const retrySystemPrompt = api.buildSystemPrompt(retryContextParts)
 
             let retryContent = ''
             try {
@@ -223,8 +223,9 @@ export const useChatStore = defineStore('chat', () => {
               _savedThinking = retryThink
               thinkingMap.value[aiMsg.id] = retryThink
               console.warn('[wandou] 🧠 AI 思考过程:\n' + retryThink)
+              _thinkingRetryCount = 0  // 仅在成功提取 thinking 后重置
             }
-            _thinkingRetryCount = 0
+            // 若重试成功但 thinking 仍缺失，保留计数器，让下次 sendMessage 继续携带 VIOLATION_PREFIX
           } else {
             console.error('[wandou] ❌ thinking 缺失已达最大重试次数，放弃自动重试')
             _thinkingRetryCount = 0

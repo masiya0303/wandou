@@ -5,9 +5,8 @@
 // 用一次轻量 API 调用从 AI 叙述中提取任务。
 // ============================================================
 import type { ApiConfig } from '@/types/game'
-import type { Quest } from '@/types/world'
 
-export interface ExtractedQuest {
+interface ExtractedQuest {
   title: string
   questType: string
   description: string

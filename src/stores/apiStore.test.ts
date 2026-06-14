@@ -22,14 +22,11 @@ describe('apiStore', () => {
     expect(api.isApiReady).toBe(true)
   })
 
-  it('buildFullSystemPrompt 合并上下文', () => {
+  it('buildSystemPrompt 合并上下文', () => {
     const api = useApiStore()
-    const result = api.buildFullSystemPrompt(['上下文A', '', '上下文B'])
+    const result = api.buildSystemPrompt(['上下文A', '', '上下文B'])
     expect(result).toContain('上下文A')
     expect(result).toContain('上下文B')
-    // 含上下文A
-    expect(result.includes('上下文A')).toBe(true)
-    expect(result.includes('上下文B')).toBe(true)
   })
 
   it('预设 CRUD', () => {
