@@ -9,10 +9,12 @@
 
 import type { Quest } from '@/types/world'
 import type { NpcEntry } from '@/types/npc'
+import type { ApiConfig } from '@/types/game'
 import { usePlayerStore } from '@/stores/playerStore'
 import { useNpcStore } from '@/stores/npcStore'
 import { useStateStore } from '@/stores/stateStore'
 import { safeParseJson, extractBalancedJson, tryRepairTruncatedJson } from './jsonExtract'
+import { chatStream } from './api'
 import {
   resolveVarDef,
   validateValue,
@@ -333,8 +335,11 @@ function applyPlayerOp(
     const attrName = parts[1]
     const attrs = { ...(player.character.attributes || {}) }
     const current = attrs[attrName] ?? 0
-    attrs[attrName] = def.incremental ? resolveIncremental(current, op.value) : Number(op.value)
-    player.updateCharacter({ ...player.character, attributes: attrs })
+    const numVal = Number(op.value)
+    attrs[attrName] = def.incremental
+      ? resolveIncremental(current, op.value)
+      : (isNaN(numVal) ? op.value : numVal)  // 非数字（如"未觉醒"）保留原字符串
+    player.updateCharacter({ ...player.character, attributes: attrs as any })
     return `✨ ${attrName}: ${attrs[attrName]}`
   }
 
@@ -485,20 +490,29 @@ function handleInventoryRemove(
 // 任务操作（统一通过 JSON Patch）
 // ============================================================
 
+function normalizeQuestStatus(raw: string): Quest['status'] {
+  const s = String(raw || '').trim()
+  if (s === 'completed' || s === '已完成' || s === '完成' || s === 'done') return 'completed'
+  if (s === 'failed' || s === '已失败' || s === '失败') return 'failed'
+  return 'active' // active / 进行中 / 任何其他值 → active
+}
+
 // ============================================================
 // 从 AI 输出的 value 构建 Quest（5字段齐全）
 // ============================================================
 function buildQuestFromValue(v: any): Quest {
   const questType = String(v.questType || v.任务类型 || v.type || '支线').trim()
   const color = String(v.color || v.任务颜色 || v.colour || defaultQuestColor(questType)).trim()
+  // AI 有时把标题写在 id 字段（长得不像 UUID 的 id 很可能是标题）
+  const idLooksLikeTitle = v.id && typeof v.id === 'string' && !/^[a-z]+-/.test(v.id)
   return {
-    id: v.id || `q-${Date.now()}`,
-    title: (v.title || v.标题 || v.name || '新任务').toString().trim(),
+    id: (idLooksLikeTitle ? `q-${Date.now()}` : (v.id || `q-${Date.now()}`)),
+    title: (v.title || v.标题 || v.name || (idLooksLikeTitle ? v.id : null) || '新任务').toString().trim(),
     questType,
     description: (v.description || v.描述 || v.content || '').toString().trim(),
     reward: (v.reward || v.奖励 || v.任务奖励 || '').toString().trim(),
     color,
-    status: (v.status || 'active').toString().trim() as any,
+    status: normalizeQuestStatus(v.status || 'active'),
     objectives: Array.isArray(v.objectives) ? v.objectives : [],
     source: (v.source || v.来源 || v.发布者 || '').toString().trim() || undefined,
     sourceNpcId: (v.sourceNpcId || v.发布者ID || '').toString().trim() || undefined,
@@ -905,5 +919,141 @@ export function processVariableUpdates(text: string): VarResult {
     applied: opsApplied.length,
     summary: summaries.slice(0, 5).join('；'),
     operations: opsApplied,
+  }
+}
+
+// ============================================================
+// 状态提取（第二次调用 — 非流式，后台静默）
+//
+// 叙事完成后，把故事文本 + 当前状态交给 AI，
+// 让它专心做一件事：输出 <thinking> + <mj_variables>。
+// ============================================================
+
+export interface ExtractionResult {
+  thinking: string
+  rawVariables: string
+}
+
+/**
+ * 构建提取专用 prompt —— 比叙事 prompt 短得多，
+ * 因为 AI 只有一个任务：读故事，提取状态变化。
+ */
+function buildExtractionPrompt(
+  storyText: string,
+  userInput: string,
+): string {
+  const ss = useStateStore()
+  const ps = usePlayerStore()
+  const ns = useNpcStore()
+
+  const invList = ps.inventory.length > 0
+    ? ps.inventory.map(i => `${i.name}×${i.quantity}(${i.type})`).join('、')
+    : '空'
+  const questList = ps.quests.filter(q => q.status === 'active').length > 0
+    ? ps.quests.filter(q => q.status === 'active').map(q => `${q.title}[${q.questType || '支线'}]`).join('、')
+    : '无'
+  const npcList = ns.npcs.filter(n => ns.getNpcCategory(n) !== '离场').length > 0
+    ? ns.npcs.filter(n => ns.getNpcCategory(n) !== '离场')
+        .map(n => `[${n.id}]${n.name}(❤${n.favor ?? 0})`).join('、')
+    : '无'
+  const locStr = [ss.currentLocation.region, ss.currentLocation.subRegion, ss.currentLocation.detail]
+    .filter(Boolean).join('·')
+
+  // 检测占位名 NPC
+  const placeholderNpcs = ns.npcs
+    .filter(n => ns.getNpcCategory(n) !== '离场')
+    .filter(n => /^[\?？]{1,3}$|^陌生人$|^神秘人$|^不明$|^未知$|^无名$|^stranger$/i.test(n.name))
+
+  let identWarn = ''
+  if (placeholderNpcs.length > 0) {
+    identWarn = '\n⚠️ 以下 NPC 名为占位名，若故事中已透露真名，必须输出 identity 更新：\n' +
+      placeholderNpcs.map(n => `  /npcs/${n.id}/identity → {name:"真名", role:"身份", ...}`).join('\n')
+  }
+
+  return [
+    '你是状态提取器。阅读故事文本，提取所有状态变化。',
+    '',
+    '【当前状态】',
+    `时间: ${ss.worldTime} | 位置: ${locStr} | 天气: ${ss.weather}`,
+    `金币: ${ps.character.gold ?? 100} | 背包: ${invList}`,
+    `活跃任务: ${questList}`,
+    `在场NPC: ${npcList}`,
+    identWarn,
+    '',
+    '【玩家输入】',
+    userInput.slice(0, 500),
+    '',
+    '【故事文本（AI 叙事）】',
+    storyText.slice(-6000),
+    '',
+    '【任务】',
+    '先输出 <thinking>，逐项分析：时间→位置→天气→物品→任务→NPC（含身份揭示检查）。',
+    '每项写明当前值 → 有无变化 → 操作路径。',
+    '',
+    '⚠️ 时间只进不退：新时间 ≥ 当前时间。格式必须严格 YYYY年 MM月 DD日 HH:MM（如 2157年 01月 01日 08:02），禁止 ISO 格式。',
+    '',
+    '⚠️ 任务判定（比你以为的更宽）：',
+    '  以下任一情况 → 立即 add 任务：',
+    '    ① NPC 给了纸条/密信/线索/地址/密码，要求你去某地/拿某物/见某人',
+    '    ② 系统/公告/短信/面板弹出明确目标',
+    '    ③ 任何角色（含匿名/陌生人）提出了一个"要你做的事"',
+    '    ④ 故事中出现带有"必须/你得/该去/按...做/跟我来"等指令性的叙事',
+    '  不需要玩家口头接受！故事中已经发生了就是任务。',
+    '',
+    '⚠️ NPC 判定：故事中任何有名/有特征/有动作的非路人角色（即使无名、戴墨镜、消失）→ 必须 add NPC。已离场的设 enabled:false。',
+    '',
+    '其他字段：仅故事正文明确变化才更新，未提及的保持原值。',
+    '再输出 <mj_variables> JSON Patch 数组，无变化输出 []。',
+    '',
+    '路径速查:',
+    '/world/time /world/location/region /world/location/subRegion /world/location/detail /world/weather',
+    '/player/gold(+N/-N) /player/inventory/- /player/quests/-',
+    '/npcs/{id}/favor(+N/-N) /npcs/{id}/identity /npcs/{id}/name /npcs/{id}/enabled',
+    '/player/attributes/{name} /player/character/{field}',
+  ].join('\n')
+}
+
+/**
+ * 从已生成的故事文本中提取状态变化。
+ * 这是第二次 API 调用——不做叙事，只做结构化提取。
+ * 即使失败也不影响已显示的故事。
+ */
+export async function extractStateFromStory(
+  config: ApiConfig,
+  storyText: string,
+  userInput: string,
+): Promise<ExtractionResult | null> {
+  if (!config.apiKey || !storyText.trim()) return null
+
+  const prompt = buildExtractionPrompt(storyText, userInput)
+
+  try {
+    const rawResponse = await chatStream(
+      config,
+      prompt,
+      [],  // no history — extraction is stateless
+      () => {}, // not streaming to user
+      undefined, // no external signal
+      0,  // no retries — if it fails, don't hold up the game
+    )
+
+    if (!rawResponse.trim()) return null
+
+    // 提取 thinking
+    const thinkMatch = rawResponse.match(/<thinking\b[^>]*>([\s\S]*?)<\/thinking\s*>/i)
+    const thinking = thinkMatch ? thinkMatch[1].trim() : ''
+
+    // 提取 mj_variables（保留原始标签文本，交给 processVariableUpdates 解析）
+    const mjMatch = rawResponse.match(/<mj_variables\b[^>]*>([\s\S]*?)<\/mj_variables\s*>/i)
+    const rawVariables = mjMatch ? mjMatch[0] : rawResponse
+
+    if (!thinking && !rawVariables.trim()) return null
+
+    console.warn('[wandou] 📊 状态提取完成 | thinking:' + (thinking ? `${thinking.length}字` : '缺失') + ' | mj_vars:' + (mjMatch ? '✓' : '从全文提取'))
+
+    return { thinking, rawVariables }
+  } catch (e: any) {
+    console.warn('[wandou] 状态提取失败（不影响叙事）:', e?.message || e?.name || 'unknown')
+    return null
   }
 }

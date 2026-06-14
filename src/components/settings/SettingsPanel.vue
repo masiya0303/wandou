@@ -7,6 +7,7 @@ import { useApiStore } from '@/stores/apiStore'
 import { useThemeStore } from '@/stores/themeStore'
 import { useChatStore } from '@/stores/chatStore'
 import WorldBookManager from './WorldBookManager.vue'
+import MemoryDebugPanel from './MemoryDebugPanel.vue'
 import ToggleSwitch from '@/components/ToggleSwitch.vue'
 import { useExtensionStore } from '@/stores/extensionStore'
 import { MARKETPLACE } from '@/marketplace'
@@ -109,6 +110,7 @@ const CARDS = [
 
   { key: 'worldbook', icon: '📖', cn: '世界书', en: 'WORLD BOOK', desc: '全局世界书、正则替换与各世界设定' },
   { key: 'extensions', icon: '🧩', cn: '扩展管理', en: 'EXTENSIONS', desc: '' },
+  { key: 'memory', icon: '🧠', cn: '记忆检查', en: 'MEMORY RUNTIME', desc: '查看事件/档案/检查点' },
   { key: 'theme', icon: '🎨', cn: '聊天主题', en: 'THEME', desc: '' },
 ] as const
 
@@ -119,7 +121,7 @@ function closeSettings() {
   else router.push('/')
 }
 
-const EXPAND_TITLES: Record<string, string> = { api:'🔌 API 配置', worldbook:'📖 世界书', extensions:'🧩 扩展管理', theme:'🎨 聊天主题' }
+const EXPAND_TITLES: Record<string, string> = { api:'🔌 API 配置', worldbook:'📖 世界书', extensions:'🧩 扩展管理', memory:'🧠 记忆运行时', theme:'🎨 聊天主题' }
 </script>
 
 <template>
@@ -243,6 +245,11 @@ const EXPAND_TITLES: Record<string, string> = { api:'🔌 API 配置', worldbook
             </div>
             <p class="ext-item-desc">{{ m.description }}</p>
           </div>
+        </div>
+
+        <!-- Memory Runtime -->
+        <div v-if="expandedKey === 'memory'" class="ex-fill">
+          <MemoryDebugPanel />
         </div>
       </div>
     </div>

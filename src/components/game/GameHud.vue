@@ -5,6 +5,7 @@ import { usePlayerStore } from '@/stores/playerStore'
 import { useNpcStore } from '@/stores/npcStore'
 import { useStateStore } from '@/stores/stateStore'
 import { bus } from '@/utils/events'
+import { getMemoryRuntime } from '@/utils/memoryRuntime'
 import type { InventoryItem, Quest } from '@/types/world'
 import type { NpcEntry } from '@/types/npc'
 import NpcDetailModal from './NpcDetailModal.vue'
@@ -18,6 +19,20 @@ const locationLabel = computed(() => stateStore.locationString())
 const timeLabel = computed(() => stateStore.worldTime)
 const weatherLabel = computed(() => stateStore.weather)
 const memoryCount = computed(() => stateStore.memories.filter(m => m.state === 'active').length)
+
+// 记忆运行时统计
+const runtimeEventCount = ref(0)
+const runtimeArchiveCount = ref(0)
+const runtimeCheckpointCount = ref(0)
+let _runtimeRefreshTimer: ReturnType<typeof setInterval> | null = null
+function refreshRuntimeStats() {
+  try {
+    const mr = getMemoryRuntime()
+    runtimeEventCount.value = mr.compilerRuntime?.eventCards?.filter(e => e.state === 'active').length || 0
+    runtimeArchiveCount.value = mr.compilerRuntime?.archiveCards?.length || 0
+    runtimeCheckpointCount.value = mr.checkpoints?.length || 0
+  } catch { /* runtime not initialized yet */ }
+}
 
 const invCategories = ['weapon','armor','consumable','material','key','other'] as const
 const catLabels: Record<string, string> = { weapon:'⚔️武器', armor:'🛡️防具', consumable:'🧪消耗品', material:'📦材料', key:'🔑关键', other:'📌其他' }
@@ -85,6 +100,9 @@ function switchTab(t: typeof tab.value) {
 }
 
 onMounted(() => {
+  refreshRuntimeStats()
+  _runtimeRefreshTimer = setInterval(refreshRuntimeStats, 2000)
+
   bus.on('inventory:toast', (payload: any) => {
     if (payload?.message) {
       showToast(payload.message)
@@ -114,6 +132,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (toastTimer) clearTimeout(toastTimer)
+  if (_runtimeRefreshTimer) clearInterval(_runtimeRefreshTimer)
 })
 </script>
 
@@ -246,7 +265,10 @@ onUnmounted(() => {
       <span class="status-time" :title="timeLabel">🕐 {{ timeLabel || '时间未知' }}</span>
       <span class="status-loc" :title="locationLabel">📍 {{ locationLabel || '地点未知' }}</span>
       <span v-if="weatherLabel" class="status-weather">{{ weatherLabel }}</span>
-      <span v-if="memoryCount > 0" class="status-memory" title="已记录的关键记忆">🧠 {{ memoryCount }}</span>
+      <span v-if="memoryCount > 0" class="status-memory" title="已记录的关键记忆">📝 {{ memoryCount }}</span>
+      <span v-if="runtimeEventCount > 0" class="status-memory" title="记忆运行时 · 活跃事件卡">⚡{{ runtimeEventCount }}</span>
+      <span v-if="runtimeArchiveCount > 0" class="status-memory dim" title="记忆运行时 · 归档">📚{{ runtimeArchiveCount }}</span>
+      <span v-if="runtimeCheckpointCount > 0" class="status-memory dim" title="检查点">💾{{ runtimeCheckpointCount }}</span>
     </div>
     <div class="tab-row">
       <button

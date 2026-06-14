@@ -56,7 +56,7 @@ function classifyError(status: number, body: string): string {
 export async function chatStream(
   config: ApiConfig,
   systemPrompt: string,
-  history: GameMessage[],
+  history: Array<{ role: string; content: string }>,
   onChunk: (chunk: string) => void,
   signal?: AbortSignal,
   retries = 1,

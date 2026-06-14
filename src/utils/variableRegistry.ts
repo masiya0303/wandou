@@ -421,7 +421,8 @@ export function validateValue(def: VarDef, rawValue: any): ValidationResult {
       }
       return { valid: true }
     }
-    return { valid: false, reason: `${def.label} 期望数字类型，收到 ${typeof rawValue}` }
+    // 非数字字符串（如"未觉醒""普通人"）→ 宽松通过，运行时由 applyPlayerOp 处理
+    return { valid: true }
   }
 
   if (vt === 'string') {

@@ -14,6 +14,7 @@ import { useNpcStore } from './npcStore'
 import { useWorldBookStore } from './worldBookStore'
 import { useChatStore } from './chatStore'
 import { useStateStore } from './stateStore'
+import { getMemoryRuntime } from '@/utils/memoryRuntime'
 
 export const useGameStore = defineStore('game', () => {
   const storeReady = ref(false)
@@ -64,6 +65,27 @@ export const useGameStore = defineStore('game', () => {
       const api = useApiStore()
       api.updateApiConfig(data.apiConfig)
     }
+
+    // 初始化记忆运行时（IndexedDB 持久化 + 检查点恢复）
+    try {
+      const mr = getMemoryRuntime()
+      mr.init(w.id).then(() => {
+        mr.syncFromStores({
+          worldTime: ss.worldTime,
+          location: ss.currentLocation,
+          weather: ss.weather,
+          npcs: ns.npcs,
+          inventory: (w.inventory || []).map((i: any) => ({
+            name: i.name, quantity: i.quantity, type: i.type,
+          })),
+          quests: w.quests || [],
+          memories: ss.memories,
+          characterGold: w.character?.gold ?? 0,
+          characterAttributes: (w.character?.attributes || {}) as Record<string, number>,
+          turnIndex: ss.turnIndex,
+        })
+      })
+    } catch { /* 非关键路径 */ }
 
     bus.emit('world:loaded', w)
     return true
@@ -148,6 +170,13 @@ export const useGameStore = defineStore('game', () => {
     ns.resetNpcs()
     cs.clearMessages()
     ss.resetState()
+
+    // 清空记忆运行时
+    try {
+      const mr = getMemoryRuntime()
+      mr.clearWorld()
+    } catch { /* 非关键路径 */ }
+
     syncSave()
   }
 

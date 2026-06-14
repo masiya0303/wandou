@@ -100,7 +100,7 @@ export async function extractMemories(
     const fullText = await chatStream(
       api.apiConfig,
       systemPrompt,
-      messages as any,
+      messages,
       () => {}, // 不流式展示
     )
 

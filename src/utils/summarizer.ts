@@ -67,7 +67,7 @@ export async function summarizeHistory(
     const summaryText = await chatStream(
       apiConfig,
       SUMMARY_SYSTEM_PROMPT,
-      summaryMessages as any,
+      summaryMessages,
       () => {}, // 不需要流式展示
     )
 

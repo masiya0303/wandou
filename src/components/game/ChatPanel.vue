@@ -53,6 +53,7 @@ function highlightNpcNames(html: string): string {
 
   // DOMParser 解析 → 遍历文本节点 → 替换
   const doc = new DOMParser().parseFromString(html, 'text/html')
+  if (!doc.body) return html
 
   function walk(node: Node) {
     if (node.nodeType === Node.TEXT_NODE) {

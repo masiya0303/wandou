@@ -1,24 +1,22 @@
 // ============================================================
 // wandou · 聊天 / 消息 Store
 //
-// 变量同步流：
-//   1. processVariableUpdates() — 统一解析 <mj_variables> JSON Patch
-//   2. playerStore.applyOps() — 统一物品入口（自动去重）
-//   3. API 物品提取（异步，回退路径）→ playerStore.applyOps()
+// 架构 v6：
+//   第一次调用（流式）→ AI 讲纯故事
+//   第二次调用（后台）→ extractStateFromStory() 提取状态变化
 // ============================================================
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { GameMessage } from '@/types/game'
 import { chatStream, abortGeneration } from '@/utils/api'
 import { buildContextParts } from '@/utils/contextBuilder'
-import { stripStateTags } from '@/utils/stateEngine'
-import { processVariableUpdates } from '@/utils/variableEngine'
+import { processVariableUpdates, extractStateFromStory } from '@/utils/variableEngine'
 import { extractMemories, commitMemories } from '@/utils/memoryEngine'
-import { extractItems } from '@/utils/itemExtractor'
-import { extractQuests } from '@/utils/questExtractor'
 import { shouldSummarize, summarizeHistory } from '@/utils/summarizer'
+import { getMemoryRuntime } from '@/utils/memoryRuntime'
 import { usePlayerStore } from './playerStore'
 import { useStateStore } from './stateStore'
+import { useNpcStore } from './npcStore'
 import { bus } from '@/utils/events'
 import { useApiStore } from './apiStore'
 
@@ -55,8 +53,6 @@ export const useChatStore = defineStore('chat', () => {
   const thinkingMap = ref<Record<string, string>>({})
   const stateSyncEnabled = ref(true)
   const memorySyncEnabled = ref(true)
-  /** 是否启用 API 物品提取回退（当 AI 没输出标签时） */
-  const itemExtractionFallback = ref(true)
   /** 是否启用对话历史自动摘要 */
   const summaryEnabled = ref(true)
   /** 摘要触发阈值（消息条数，0=不启用） */
@@ -64,11 +60,8 @@ export const useChatStore = defineStore('chat', () => {
 
   const messageCount = computed(() => messages.value.length)
 
-  // 保留最后一次输入用于重试
+  // 保留最后一次输入用于手动重试
   let _lastInput = ''
-  /** 当前发送已自动重试次数（防止死循环，最多重试 2 次） */
-  let _thinkingRetryCount = 0
-  const MAX_THINKING_RETRIES = 2
 
   function addMessage(msg: GameMessage) { messages.value.push(msg) }
   function clearMessages() { messages.value = []; _lastInput = '' }
@@ -94,7 +87,7 @@ export const useChatStore = defineStore('chat', () => {
 
     const api = useApiStore()
     const player = usePlayerStore()
-    // ---- 摘要检查（在添加用户消息前，防止新版被摘要吞掉） ----
+    // ---- 摘要检查 ----
     if (summaryEnabled.value && shouldSummarize(messages.value, summaryThreshold.value)) {
       const result = await summarizeHistory(messages.value, api.apiConfig)
       if (result) {
@@ -114,42 +107,24 @@ export const useChatStore = defineStore('chat', () => {
       bus.emit('chat:message_sent', userMsg)
     }
 
-    // ---- 强制输出格式后缀（追加到最后一条用户消息给 API，但不显示） ----
-    const BASE_SUFFIX = `
-
-[系统指令：请先回应用户，然后在末尾输出 <thinking>…</thinking> 和 <mj_variables>…</mj_variables> 两个标签。标签格式见上下文末尾的「变量更新协议」。]`
-
-    const VIOLATION_PREFIX = `🛑 你上一轮没有输出 <thinking> 和 <mj_variables> 标签！本轮必须严格按「变量更新协议」Step.0~Step.7 输出，每项写明当前值→有无变化→结论。
-
-`
-
-    const MANDATORY_OUTPUT_SUFFIX = _thinkingRetryCount > 0
-      ? VIOLATION_PREFIX + BASE_SUFFIX
-      : BASE_SUFFIX
-
-    // 先插入 AI 占位符，再构建 messagesToSend ——
-    // slice(0,-1) 应该删掉 AI 占位符而不是用户消息
+    // 插入 AI 占位符
     const aiMsg: GameMessage = {
       id: `assistant-${Date.now()}`, role: 'assistant',
       content: '', timestamp: Date.now(),
     }
     addMessage(aiMsg)
 
-    // 构建消息数组时，最后一条用户消息追加强制输出格式
-    const messagesToSend = messages.value.slice(0, -1).map((m, i, arr) => {
-      if (i === arr.length - 1) {
-        return { ...m, content: m.content + MANDATORY_OUTPUT_SUFFIX }
-      }
-      return m
-    })
+    const messagesToSend = messages.value.slice(0, -1) // 排除 AI 占位符
     isGenerating.value = true
     bus.emit('chat:generation_start', aiMsg)
 
     try {
+      // ====== 第一次调用：纯讲故事（流式） ======
       const contextParts = buildContextParts({
         stateSyncEnabled: stateSyncEnabled.value,
         memorySyncEnabled: memorySyncEnabled.value,
         messages: messages.value,
+        userInput: _lastInput || '',
       })
       const systemPrompt = api.buildSystemPrompt(contextParts)
 
@@ -164,299 +139,125 @@ export const useChatStore = defineStore('chat', () => {
       )
 
       if (aiMsg.content) {
-        let rawText = aiMsg.content
-        let _savedThinking = ''
+        // 防御性剥离标签（叙事 AI 不该输出这些，但防一手）
+        aiMsg.content = aiMsg.content
+          .replace(/<thinking\b[^>]*>[\s\S]*?<\/thinking\s*>/gi, '')
+          .replace(/<mj_variables\b[^>]*>[\s\S]*?<\/mj_variables\s*>/gi, '')
+          .trim()
 
-        // ---- 提取 AI 思考过程（含自动重试） ----
-        function extractThinking(text: string): string | null {
-          const m = text.match(/<thinking\b[^>]*>([\s\S]*?)<\/thinking\s*>/i)
-          return m ? m[1].trim() : null
-        }
-
-        let thinkContent = extractThinking(rawText)
-        if (thinkContent) {
-          _savedThinking = thinkContent
-          thinkingMap.value[aiMsg.id] = thinkContent
-          console.warn('[wandou] 🧠 AI 思考过程:\n' + thinkContent)
-          _thinkingRetryCount = 0
-        } else {
-          console.error('[wandou] 🚨 AI 本轮未输出 <thinking> 标签！')
-          console.error('[wandou] 完整回复末尾100字符:', rawText.slice(-100))
-          bus.emit('chat:thinking_missing', aiMsg.id)
-
-          if (_thinkingRetryCount < MAX_THINKING_RETRIES) {
-            _thinkingRetryCount++
-            console.warn(`[wandou] 🔄 自动重试 (${_thinkingRetryCount}/${MAX_THINKING_RETRIES})...`)
-
-            // 构建重试用消息（不改 messages 数组）
-            const retryMessages = messages.value.slice(0, -1).map((m, i, arr) => {
-              if (i === arr.length - 1) {
-                return { ...m, content: m.content + VIOLATION_PREFIX + BASE_SUFFIX }
-              }
-              return m
-            })
-            const retryContextParts = buildContextParts({
-              stateSyncEnabled: stateSyncEnabled.value,
-              memorySyncEnabled: memorySyncEnabled.value,
-              messages: messages.value,
-            })
-            const retrySystemPrompt = api.buildSystemPrompt(retryContextParts)
-
-            let retryContent = ''
-            try {
-              retryContent = await chatStream(
-                api.apiConfig,
-                retrySystemPrompt,
-                retryMessages,
-                (token) => { retryContent += token; aiMsg.content = retryContent; bus.emit('chat:generation_token', token, aiMsg) },
-              )
-            } catch (retryErr: any) {
-              console.warn('[wandou] 重试被中止，保留第一轮正文:', retryErr?.message || retryErr?.name)
-              if (!retryContent) retryContent = rawText // 恢复第一轮内容
-            }
-
-            // 重试完成：重新提取 thinking
-            rawText = retryContent
-            aiMsg.content = retryContent
-            const retryThink = extractThinking(retryContent)
-            if (retryThink) {
-              _savedThinking = retryThink
-              thinkingMap.value[aiMsg.id] = retryThink
-              console.warn('[wandou] 🧠 AI 思考过程:\n' + retryThink)
-              _thinkingRetryCount = 0  // 仅在成功提取 thinking 后重置
-            }
-            // 若重试成功但 thinking 仍缺失，保留计数器，让下次 sendMessage 继续携带 VIOLATION_PREFIX
-          } else {
-            console.error('[wandou] ❌ thinking 缺失已达最大重试次数，放弃自动重试')
-            _thinkingRetryCount = 0
-          }
-        }
-
-        // ---- 统一变量处理（唯一入口） ----
+        // ====== 第二次调用：提取状态变化（后台，不流式） ======
         if (stateSyncEnabled.value) {
-          // beginTurn() 必须在 processVariableUpdates 之前调用，确保去重标记在同一回合生效
-          player.beginTurn()
-          const varResult = processVariableUpdates(rawText)
+          try {
+            const extraction = await extractStateFromStory(
+              api.apiConfig,
+              aiMsg.content,
+              _lastInput,
+            )
 
-          // 物品变更 → toast 通知
-          // 从 applied operations 中提取物品变更
-          const placedItems: { name: string; quantity: number }[] = []
-          const removedItems: { name: string; quantity: number }[] = []
-
-          for (const entry of varResult.operations) {
-            if (!entry.result) continue
-            const op = entry.op
-            if (op.path.includes('/inventory')) {
-              if (op.op === 'add' || (op.op === 'replace' && op.path.endsWith('/-'))) {
-                const name = op.value?.name || op.value?.名称 || ''
-                const qty = op.value?.quantity ?? op.value?.数量 ?? 1
-                if (name) placedItems.push({ name, quantity: qty })
-              } else if (op.op === 'remove') {
-                const parts = op.path.split('/').filter(Boolean)
-                const name = parts[parts.length - 1] || ''
-                if (name && name !== '-') removedItems.push({ name, quantity: 1 })
+            if (extraction) {
+              // 保存 thinking → 蛋糕 UI
+              if (extraction.thinking) {
+                thinkingMap.value[aiMsg.id] = extraction.thinking
+                console.warn('[wandou] 🧠 提取思考: ' + extraction.thinking.length + '字')
               }
-            }
-          }
-          if (placedItems.length > 0 || removedItems.length > 0) {
-            emitItemToast(placedItems, removedItems)
-          }
 
-          // 任务变更 → toast 通知（如果在 handleQuestOp 中未通过 event bus 触发，这里兜底）
-          for (const entry of varResult.operations) {
-            if (!entry.result || !entry.op.path) continue
-            if (entry.op.path.includes('/quests') || entry.op.path.includes('/任务') || entry.op.path.includes('/委托') || entry.op.path.includes('/missions')) {
-              if (entry.result.startsWith('📋')) {
-                bus.emit('quest:added', { title: entry.result.replace('📋 新任务：', '') })
-              }
-            }
-          }
+              // 处理变量更新
+              if (extraction.rawVariables) {
+                player.beginTurn()
+                const varResult = processVariableUpdates(extraction.rawVariables)
 
-          // 汇总日志（warning 级别，始终可见）
-          if (varResult.summary) {
-            console.warn('[wandou] 变量变更汇总:', varResult.summary)
-          }
-        }
-
-        // 剥离所有变量标签，保留干净正文
-        aiMsg.content = stripStateTags(rawText)
-
-        // 将思考内容嵌入消息末尾（HTML 注释，不可见但随存档持久化）
-        if (_savedThinking) {
-          aiMsg.content += '\n<!--thinking:' + JSON.stringify(_savedThinking) + '-->'
-        }
-
-        // ---- API 物品提取（异步，回退路径 — 仅 mj_variables 缺失时启用） ----
-        const hasMjVars = /<mj_variables\b/i.test(rawText)
-        if (stateSyncEnabled.value && itemExtractionFallback.value && !hasMjVars) {
-          extractItems(api.apiConfig, messages.value.slice(0, -1), rawText)
-            .then(items => {
-              if (items.length === 0) return
-
-              const ops = items.map(item => ({
-                op: item.op,
-                name: item.name,
-                quantity: item.quantity,
-                type: item.type,
-                description: item.description,
-              }))
-              const result = player.applyOps(ops)
-
-              if (result.placed.length > 0 || result.removed.length > 0) {
-                emitItemToast(
-                  result.placed.map(p => ({ name: p.name, quantity: p.quantity })),
-                  result.removed.map(r => ({ name: r.name, quantity: r.quantity })),
-                )
-              }
-            })
-            .catch(() => {
-              // 静默失败 — API 提取只是回退方案
-            })
-        }
-
-        // ---- API 任务提取（异步，回退路径 — 仅 mj_variables 缺失时启用） ----
-        if (stateSyncEnabled.value && itemExtractionFallback.value && !hasMjVars) {
-          extractQuests(api.apiConfig, _lastInput, rawText, player.quests.map(q => q.title))
-            .then(quests => {
-              if (quests.length === 0) return
-              console.warn('[wandou] API 任务提取回退:', quests.map(q => q.title).join('、'))
-              for (const q of quests) {
-                // 避免重复：精确匹配 + 模糊匹配（名称相似度 > 50% 且同名关键词重叠）
-                const existingTitles = player.quests.map(x => x.title)
-                if (existingTitles.some(t => t === q.title)) continue
-                // 模糊匹配：提取标题中的地点关键词，如果已有任务包含相同地点词则跳过
-                const qWords = new Set(q.title.replace(/[·\-—，。！？、\s]/g, '').split(''))
-                const isSimilar = existingTitles.some(t => {
-                  const tWords = new Set(t.replace(/[·\-—，。！？、\s]/g, '').split(''))
-                  const common = [...qWords].filter(w => tWords.has(w)).length
-                  return common > q.title.length * 0.4 // 超过40%字符相同
-                })
-                if (isSimilar) {
-                  console.warn('[wandou] questExtractor: 疑似重复，跳过:', q.title)
-                  continue
+                // 物品 toast
+                const placedItems: { name: string; quantity: number }[] = []
+                const removedItems: { name: string; quantity: number }[] = []
+                for (const entry of varResult.operations) {
+                  if (!entry.result) continue
+                  const op = entry.op
+                  if (op.path.includes('/inventory')) {
+                    if (op.op === 'add' || (op.op === 'replace' && op.path.endsWith('/-'))) {
+                      const name = op.value?.name || op.value?.名称 || ''
+                      const qty = op.value?.quantity ?? op.value?.数量 ?? 1
+                      if (name) placedItems.push({ name, quantity: qty })
+                    } else if (op.op === 'remove') {
+                      const parts = op.path.split('/').filter(Boolean)
+                      const name = parts[parts.length - 1] || ''
+                      if (name && name !== '-') removedItems.push({ name, quantity: 1 })
+                    }
+                  }
                 }
-                player.addQuest({
-                  id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                  title: q.title,
-                  questType: q.questType || '支线',
-                  description: q.description,
-                  reward: q.reward,
-                  color: q.color || '#ffa726',
-                  status: q.status,
-                  objectives: [],
-                })
-              }
-            })
-            .catch(() => {
-              // 静默失败 — API 提取只是回退方案
-            })
-        }
-
-        // ---- 从叙述文本直接提取时间/地点（正则回退） ----
-        // 只在 mj_variables 解析失败时才启用（主路径优先）
-        if (stateSyncEnabled.value) {
-          const hasMjVars = /<mj_variables\b/i.test(rawText)
-          if (hasMjVars) {
-            // mj_variables 已提取 → 不跑正则回退，防止误匹配思考内容中的参考值
-          } else {
-            const stateStore = useStateStore()
-            let timeExtractedViaFallback = false
-            let locExtractedViaFallback = false
-
-            // 先去掉 <thinking> 块，防止把思考中的「当前位置：未知」当真实值
-            const textForFallback = rawText.replace(/<thinking\b[^>]*>[\s\S]*?<\/thinking\s*>/gi, '')
-
-            // -------------------------------
-            // 方式 A：AI 消息末尾的「时间 地点 天气」行
-            // -------------------------------
-            const lines = textForFallback.split(/\n/)
-            for (let i = lines.length - 1; i >= Math.max(0, lines.length - 5); i--) {
-              const line = lines[i].trim()
-              if (!line) continue
-              const endMatch = line.match(/^(\d{4}年\s*\d{2}月\s*\d{2}日\s*\d{2}:\d{2})\s+(.+?)\s+(\S+)$/)
-              if (!endMatch) continue
-
-              const timeStr = endMatch[1].replace(/\s+/g, ' ')
-              const locRaw = endMatch[2].trim()
-              const weatherRaw = endMatch[3].trim()
-
-              const timeResult = stateStore.setWorldTime(timeStr)
-              if (timeResult.ok) {
-                console.warn('[wandou] 正则回退提取时间:', timeStr)
-                timeExtractedViaFallback = true
-              }
-
-              stateStore.setWeather(weatherRaw)
-              console.warn('[wandou] 正则回退提取天气:', weatherRaw)
-
-              const dotIdx = locRaw.indexOf('·')
-              let region: string; let subRegion: string; let detail: string
-              if (dotIdx >= 0) {
-                const leftSide = locRaw.slice(0, dotIdx).trim()
-                detail = locRaw.slice(dotIdx + 1).trim()
-                const leftParts = leftSide.split(/\s+/)
-                region = leftParts[0] || locRaw
-                subRegion = leftParts.slice(1).join(' ') || ''
-              } else {
-                const parts = locRaw.split(/\s+/)
-                region = parts[0] || locRaw
-                subRegion = parts.length > 1 ? parts[1] : ''
-                detail = parts.length > 2 ? parts.slice(2).join(' ') : ''
-              }
-
-              const oldLoc = stateStore.currentLocation
-              if (region !== oldLoc.region || subRegion !== oldLoc.subRegion || detail !== oldLoc.detail) {
-                stateStore.setLocation({ region, subRegion, detail })
-                console.warn('[wandou] 正则回退提取位置:', locRaw, '→', { region, subRegion, detail })
-                locExtractedViaFallback = true
-              }
-              break
-            }
-
-            // -------------------------------
-            // 方式 B：「当前时间：XXX」「当前位置：XXX」
-            // -------------------------------
-            const timeMatch = textForFallback.match(/当前时间[：:]\s*(\d{4}年\s*\d{2}月\s*\d{2}日\s*\d{2}:\d{2})/)
-            if (timeMatch) {
-              const timeResult = stateStore.setWorldTime(timeMatch[1].replace(/\s+/g, ' '))
-              if (timeResult.ok) { console.warn('[wandou] 正则回退提取时间(B):', timeMatch[1]); timeExtractedViaFallback = true }
-            }
-            const locMatch = textForFallback.match(/当前位置[：:]\s*(.+?)(?:\n|$)/)
-            if (locMatch) {
-              const locStr = locMatch[1].trim()
-              // 忽略占位值（如"未知区域""未知地区"），防止覆盖正确的变量值
-              if (/^(未知|不明|未设定|暂无)/.test(locStr)) {
-                console.debug('[wandou] 正则回退跳过占位位置:', locStr)
-              } else {
-                const parts = locStr.split('·')
-                if (parts.length >= 2) {
-                  stateStore.setLocation({ region: parts[0].trim(), subRegion: '', detail: parts.slice(1).join('·').trim() })
-                } else {
-                  stateStore.setLocation({ region: locStr, subRegion: '', detail: '' })
+                if (placedItems.length > 0 || removedItems.length > 0) {
+                  emitItemToast(placedItems, removedItems)
                 }
-                console.warn('[wandou] 正则回退提取位置(B):', locStr)
-                locExtractedViaFallback = true
+
+                // 任务 toast
+                for (const entry of varResult.operations) {
+                  if (!entry.result || !entry.op.path) continue
+                  if (entry.op.path.includes('/quests') || entry.op.path.includes('/任务')) {
+                    if (entry.result.startsWith('📋')) {
+                      bus.emit('quest:added', { title: entry.result.replace('📋 新任务：', '') })
+                    }
+                  }
+                }
+
+                if (varResult.summary) {
+                  console.warn('[wandou] 变量变更汇总:', varResult.summary)
+                }
               }
             }
-
-            if (timeExtractedViaFallback || locExtractedViaFallback) {
-              const parts: string[] = []
-              if (timeExtractedViaFallback) parts.push('时间')
-              if (locExtractedViaFallback) parts.push('位置')
-              console.warn(`[wandou] ⚠️ AI 未使用 <mj_variables> 标签，已从正文提取${parts.join('+')}`)
-            }
+          } catch (extractErr: any) {
+            console.warn('[wandou] 状态提取失败（不影响叙事）:', extractErr?.message || extractErr)
           }
         }
 
-        // ---- 记忆提取（异步） ----
+        // 将 thinking 嵌入消息（随存档持久化）
+        const thinkText = thinkingMap.value[aiMsg.id]
+        if (thinkText) {
+          aiMsg.content += '\n<!--thinking:' + JSON.stringify(thinkText) + '-->'
+        }
+
+        // ---- 记忆提取（异步 + MemoryRuntime 摄入管道） ----
         if (memorySyncEnabled.value) {
           const ctx = messages.value
             .slice(Math.max(0, messages.value.length - 6), -1)
             .map(m => `${m.role}: ${m.content}`)
             .join('\n')
+
+          // 传统记忆提取（兼容）
           extractMemories(aiMsg.content, ctx)
             .then(entries => { if (entries.length > 0) commitMemories(entries) })
             .catch(() => {})
+
+          // MemoryRuntime 摄入管道
+          try {
+            const mr = getMemoryRuntime()
+            const state = useStateStore()
+            const npc = useNpcStore()
+            const playerStore = usePlayerStore()
+            // 同步 store 状态到编译器运行时
+            mr.syncFromStores({
+              worldTime: state.worldTime,
+              location: state.currentLocation,
+              weather: state.weather,
+              npcs: npc.npcs,
+              inventory: playerStore.inventory.map(i => ({
+                name: i.name, quantity: i.quantity, type: i.type,
+              })),
+              quests: playerStore.quests,
+              memories: state.memories,
+              characterGold: playerStore.character.gold ?? 0,
+              characterAttributes: (playerStore.character.attributes || {}) as Record<string, number>,
+              turnIndex: state.turnIndex,
+            })
+            // 摄入新记忆到运行时
+            await mr.ingestTurn(aiMsg.content, api.apiConfig)
+            // 运行生命周期
+            mr.runLifecycle()
+            // 每 12 轮自动保存检查点
+            if (state.turnIndex % 12 === 0) {
+              await mr.saveCheckpoint(messages.value)
+            }
+          } catch (mrErr: any) {
+            console.debug('[wandou] MemoryRuntime 摄入跳过:', mrErr?.message || mrErr)
+          }
         }
       }
 
@@ -561,7 +362,7 @@ export const useChatStore = defineStore('chat', () => {
   return {
     messages, isGenerating, error, errorType, messageCount,
     thinkingMap,
-    stateSyncEnabled, memorySyncEnabled, itemExtractionFallback,
+    stateSyncEnabled, memorySyncEnabled,
     summaryEnabled, summaryThreshold,
     addMessage, clearMessages, sendMessage, retry, dismissError,
     regenerate, stopGeneration, snapshot, restore,
