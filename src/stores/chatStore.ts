@@ -89,7 +89,7 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  async function sendMessage(userInput: string) {
+  async function sendMessage(userInput: string, skipAddUser: boolean = false) {
     if (isGenerating.value || !userInput.trim()) return
 
     const api = useApiStore()
@@ -105,12 +105,14 @@ export const useChatStore = defineStore('chat', () => {
     error.value = ''
     _lastInput = userInput.trim()
 
-    const userMsg: GameMessage = {
-      id: `user-${Date.now()}`, role: 'user',
-      content: _lastInput, timestamp: Date.now(),
+    if (!skipAddUser) {
+      const userMsg: GameMessage = {
+        id: `user-${Date.now()}`, role: 'user',
+        content: _lastInput, timestamp: Date.now(),
+      }
+      addMessage(userMsg)
+      bus.emit('chat:message_sent', userMsg)
     }
-    addMessage(userMsg)
-    bus.emit('chat:message_sent', userMsg)
 
     // ---- 强制输出格式后缀（追加到最后一条用户消息给 API，但不显示） ----
     const BASE_SUFFIX = `
@@ -132,6 +134,14 @@ export const useChatStore = defineStore('chat', () => {
       ? VIOLATION_PREFIX + BASE_SUFFIX
       : BASE_SUFFIX
 
+    // 先插入 AI 占位符，再构建 messagesToSend ——
+    // slice(0,-1) 应该删掉 AI 占位符而不是用户消息
+    const aiMsg: GameMessage = {
+      id: `assistant-${Date.now()}`, role: 'assistant',
+      content: '', timestamp: Date.now(),
+    }
+    addMessage(aiMsg)
+
     // 构建消息数组时，最后一条用户消息追加强制输出格式
     const messagesToSend = messages.value.slice(0, -1).map((m, i, arr) => {
       if (i === arr.length - 1) {
@@ -139,12 +149,6 @@ export const useChatStore = defineStore('chat', () => {
       }
       return m
     })
-
-    const aiMsg: GameMessage = {
-      id: `assistant-${Date.now()}`, role: 'assistant',
-      content: '', timestamp: Date.now(),
-    }
-    addMessage(aiMsg)
     isGenerating.value = true
     bus.emit('chat:generation_start', aiMsg)
 
@@ -480,11 +484,11 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  /** 错误后重试 — 复用上次输入 */
+  /** 错误后重试 — 复用上次输入（不重复添加用户消息） */
   function retry() {
     if (isGenerating.value || !_lastInput) return
     error.value = ''
-    sendMessage(_lastInput)
+    sendMessage(_lastInput, true)
   }
 
   function dismissError() {
