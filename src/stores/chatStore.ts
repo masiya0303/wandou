@@ -117,7 +117,7 @@ export const useChatStore = defineStore('chat', () => {
     // ---- 强制输出格式后缀（追加到最后一条用户消息给 API，但不显示） ----
     const BASE_SUFFIX = `
 
-[系统指令：回复末尾必须输出 <thinking>…</thinking> 和 <mj_variables>…</mj_variables> 两个标签，详见上下文末尾的「变量更新协议」。正文已结束，现在输出标签。]`
+[系统指令：请先回应用户，然后在末尾输出 <thinking>…</thinking> 和 <mj_variables>…</mj_variables> 两个标签。标签格式见上下文末尾的「变量更新协议」。]`
 
     const VIOLATION_PREFIX = `🛑 你上一轮没有输出 <thinking> 和 <mj_variables> 标签！本轮必须严格按「变量更新协议」Step.0~Step.7 输出，每项写明当前值→有无变化→结论。
 
