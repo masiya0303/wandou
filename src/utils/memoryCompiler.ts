@@ -709,7 +709,9 @@ export function createKeywordRetriever(runtime: CompilerRuntimeState): Retriever
   }
 }
 
-/** 组合检索器：先本地关键词，再可选向量检索 */
+/** 组合检索器：先本地关键词，再可选向量检索
+ * @deprecated 使用 createPipelineRetriever 替代（来自 retrieverPipeline.ts）
+ */
 export function createHybridRetriever(
   runtime: CompilerRuntimeState,
   vectorRetriever?: Retriever,
@@ -728,6 +730,32 @@ export function createHybridRetriever(
       return [...kwResults, ...vecResults.filter(r => !kwIds.has(r.id))]
     },
   }
+}
+
+/**
+ * 向量混合检索器（关键词 + TF-IDF + 可选 LLM rerank）
+ * 对接 retrieverPipeline。
+ */
+export async function createVectorHybridRetriever(
+  runtime: CompilerRuntimeState,
+  apiConfig?: any,
+  topK: number = 10,
+): Promise<Retriever> {
+  // 延迟导入避免循环
+  const { VectorStore, getVectorStore } = await import('./vectorStore')
+  const { createPipelineRetriever, DEFAULT_PIPELINE_CONFIG } = await import('./retrieverPipeline')
+
+  const vs = getVectorStore()
+  // 确保已索引
+  if (vs.indexedDocs === 0) {
+    vs.index(runtime)
+  }
+
+  return createPipelineRetriever(runtime, vs, {
+    ...DEFAULT_PIPELINE_CONFIG,
+    round2TopM: Math.min(6, topK),
+    apiConfig,
+  })
 }
 
 // ============================================================

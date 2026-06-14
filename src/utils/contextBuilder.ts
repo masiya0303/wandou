@@ -136,7 +136,26 @@ export async function buildContextPartsAdvanced(
 
     if (runtime) {
       const cfg = { ...DEFAULT_COMPILER_CONFIG, ...(opts.compilerConfig || {}) }
-      const retriever = opts.retriever || createKeywordRetriever(runtime)
+      let retriever = opts.retriever
+      // 默认使用 TF-IDF 向量检索器（零依赖），词关键词做回退
+      if (!retriever) {
+        try {
+          const { getVectorStore } = await import('./vectorStore')
+          const vs = getVectorStore()
+          // 确保索引
+          if (vs.indexedDocs === 0) vs.index(runtime)
+          const { createPipelineRetriever, DEFAULT_PIPELINE_CONFIG: pCfg } = await import('./retrieverPipeline')
+          retriever = createPipelineRetriever(runtime, vs, {
+            ...pCfg,
+            // 高级模式默认不调 LLM rerank（避免额外 API 调用延迟）
+            queryRewriteEnabled: false,
+            rerankEnabled: false,
+            graphExpandEnabled: pCfg.graphExpandEnabled,
+          })
+        } catch {
+          retriever = createKeywordRetriever(runtime)
+        }
+      }
 
       compileResult = await compileContextAdvanced(
         { runtime, query },

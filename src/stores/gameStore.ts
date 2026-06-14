@@ -84,6 +84,14 @@ export const useGameStore = defineStore('game', () => {
           characterAttributes: (w.character?.attributes || {}) as Record<string, number>,
           turnIndex: ss.turnIndex,
         })
+
+        // 初始化 TF-IDF 向量索引
+        import('@/utils/vectorStore').then(({ getVectorStore }) => {
+          const vs = getVectorStore()
+          vs.init(w.id).then(() => {
+            vs.index(mr.compilerRuntime)
+          })
+        })
       })
     } catch { /* 非关键路径 */ }
 

@@ -2,12 +2,14 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { getMemoryRuntime, type MemoryRuntimeConfig } from '@/utils/memoryRuntime'
+import { getVectorStore } from '@/utils/vectorStore'
 import type { CompilerRuntimeState } from '@/utils/compilerRuntime'
 
 const mr = getMemoryRuntime()
+const vs = getVectorStore()
 
 // ---- 标签页 ----
-const tab = ref<'overview' | 'events' | 'archives' | 'checkpoints' | 'debug'>('overview')
+const tab = ref<'overview' | 'events' | 'archives' | 'vector' | 'checkpoints' | 'debug'>('overview')
 
 // ---- 自动刷新 ----
 const refreshKey = ref(0)
@@ -56,6 +58,22 @@ async function handleRunLifecycle() {
   const result = mr.runLifecycle()
   alert(`生命周期：过期 ${result.expired.length} / 归档 ${result.archived.length} / 裁剪 ${result.pruned}`)
   refreshKey.value++
+}
+
+// ---- 向量操作 ----
+const vectorStats = ref({ indexedDocs: 0, lastIndexedAt: 0, vocabularySize: 0 })
+function refreshVectorStats() {
+  const s = vs.getIndexStats()
+  vectorStats.value = { indexedDocs: s.indexedDocs, lastIndexedAt: s.lastIndexedAt, vocabularySize: s.vocabularySize }
+}
+void refreshVectorStats()
+
+function handleReindex() {
+  if (rt.value) {
+    vs.index(rt.value)
+    refreshVectorStats()
+    refreshKey.value++
+  }
 }
 
 // ---- 格式化 ----
@@ -127,6 +145,7 @@ const checkpointList = computed(() => mr?.checkpoints || [])
       <button :class="{ active: tab === 'overview' }" @click="tab = 'overview'">概览</button>
       <button :class="{ active: tab === 'events' }" @click="tab = 'events'">事件 ({{ eventStats.total }})</button>
       <button :class="{ active: tab === 'archives' }" @click="tab = 'archives'">档案 ({{ archiveStats.total }})</button>
+      <button :class="{ active: tab === 'vector' }" @click="tab = 'vector'; refreshVectorStats()">向量 ({{ vectorStats.indexedDocs }})</button>
       <button :class="{ active: tab === 'checkpoints' }" @click="tab = 'checkpoints'">检查点 ({{ checkpointList.length }})</button>
       <button :class="{ active: tab === 'debug' }" @click="tab = 'debug'">调试日志</button>
     </div>
@@ -208,6 +227,52 @@ const checkpointList = computed(() => mr?.checkpoints || [])
           <span v-if="a.entities.length">实体: {{ a.entities.join('、') }}</span>
           <span v-if="a.keywords.length">关键词: {{ a.keywords.join('、') }}</span>
         </div>
+      </div>
+    </div>
+
+    <!-- 向量 -->
+    <div v-if="tab === 'vector'" class="panel">
+      <div class="section">
+        <div class="section-title">🔢 TF-IDF 向量索引</div>
+        <div class="card">
+          <div class="vec-stats">
+            <span>📄 索引文档: <strong>{{ vectorStats.indexedDocs }}</strong></span>
+            <span>📚 词汇量: <strong>{{ vectorStats.vocabularySize }}</strong></span>
+            <span>🕐 最后索引: <strong>{{ vectorStats.lastIndexedAt ? fmtTime(vectorStats.lastIndexedAt) : '未索引' }}</strong></span>
+          </div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-title">检索流水线</div>
+        <div class="card">
+          <p style="margin:0 0 8px;font-size:11px;opacity:0.7">
+            关键词检索 + TF-IDF 语义检索 → 合并去重 → (可选 LLM 重排) → 关系网络扩展 → 终选结果
+          </p>
+          <div class="pipeline-viz">
+            <span class="pipe-step">🔍 关键词 →</span>
+            <span class="pipe-step">📐 TF-IDF →</span>
+            <span class="pipe-step">🔄 合并去重 →</span>
+            <span class="pipe-step">🧠 LLM重排 →</span>
+            <span class="pipe-step">🕸️ 图谱扩展</span>
+          </div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-title">vs yijiekkk</div>
+        <div class="card">
+          <table class="cmp-table">
+            <tr><td></td><td><strong>wandou</strong></td><td>yijiekkk</td></tr>
+            <tr><td>向量化</td><td class="win">TF-IDF 纯本地</td><td>Embedding API</td></tr>
+            <tr><td>重排序</td><td class="win">LLM Rerank</td><td>LLM Rerank</td></tr>
+            <tr><td>图谱扩展</td><td class="win">relationNetwork</td><td>Vector + Graph</td></tr>
+            <tr><td>API 依赖</td><td class="win">零依赖(本地) / API(增强)</td><td>Embedding + Chat API</td></tr>
+            <tr><td>中文分词</td><td class="win">字 + 词 + Bigram</td><td>模型依赖</td></tr>
+          </table>
+        </div>
+      </div>
+      <div class="actions">
+        <button @click="handleReindex">🔄 重建索引</button>
+        <button @click="refreshVectorStats">🔍 刷新统计</button>
       </div>
     </div>
 
@@ -330,4 +395,19 @@ const checkpointList = computed(() => mr?.checkpoints || [])
   background: rgba(255,255,255,0.3); border: 1px dashed var(--theme-border-ice);
   display: flex; flex-wrap: wrap; gap: 12px; font-size: 10px; margin-top: 8px;
 }
+
+.vec-stats { display: flex; flex-wrap: wrap; gap: 14px; }
+.vec-stats span { font-size: 11px; opacity: 0.8; }
+.vec-stats strong { color: var(--theme-text-accent); }
+
+.pipeline-viz { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.pipe-step {
+  padding: 2px 8px; border-radius: 10px; font-size: 10px;
+  background: rgba(149,117,205,0.1); color: #9575cd; border: 1px solid rgba(149,117,205,0.2);
+}
+
+.cmp-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+.cmp-table td { padding: 3px 8px; border-bottom: 1px solid var(--theme-border-ice); }
+.cmp-table td:first-child { opacity: 0.5; width: 60px; }
+.cmp-table .win { color: #4caf50; font-weight: 600; }
 </style>
