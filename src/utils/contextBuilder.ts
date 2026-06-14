@@ -8,7 +8,7 @@ import { useWorldBookStore } from '@/stores/worldBookStore'
 import { useNpcStore } from '@/stores/npcStore'
 import { usePlayerStore } from '@/stores/playerStore'
 import { useStateStore } from '@/stores/stateStore'
-import { buildFirewallBlock } from '@/utils/roleFirewall'
+import { ROLE_FIREWALL_SHORT } from '@/utils/roleFirewall'
 import { buildFullStateSnapshot } from '@/utils/stateEngine'
 import { scanAndCollect, extractRecentText } from '@/utils/worldBookEngine'
 import { scanNpcs } from '@/utils/npcEngine'
@@ -65,7 +65,7 @@ export function buildContextParts(opts: ContextOpts): string[] {
     parts.push(`## 当前世界：${ws.worldName || '未知世界'}\n${ws.worldDescription.trim()}`)
   }
 
-  parts.push(buildFirewallBlock())
+  parts.push(ROLE_FIREWALL_SHORT)
 
   // ---- 当前角色状态（AI 需要知道背包/任务现状） ----
   if (opts.stateSyncEnabled) {

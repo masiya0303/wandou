@@ -117,16 +117,9 @@ export const useChatStore = defineStore('chat', () => {
     // ---- 强制输出格式后缀（追加到最后一条用户消息给 API，但不显示） ----
     const BASE_SUFFIX = `
 
-[系统指令 — 最高优先级]
-你必须在回复末尾输出以下两个标签，缺一不可：
-1. <thinking>按 Step.0~Step.7 逐项详细检查，每项必须写明"当前值 → 是否有变化 → 结论"，禁止只写"无变化"三个字跳过、禁止只列条目不做推理。总共不低于200字。</thinking>
-2. <mj_variables>[...]</mj_variables>（无变量变化时输出 []）
-禁止省略任何标签。禁止只写正文不写标签。禁止 thinking 里敷衍了事。
-正文已结束。现在输出标签：`
+[系统指令：回复末尾必须输出 <thinking>…</thinking> 和 <mj_variables>…</mj_variables> 两个标签，详见上下文末尾的「变量更新协议」。正文已结束，现在输出标签。]`
 
-    const VIOLATION_PREFIX = `🛑 你上一轮回复严重违规：没有按 Step.0~Step.7 逐项输出 <thinking> 和 <mj_variables> 标签！
-
-本轮必须严格按照以下模板输出 thinking，每项写明当前值→变化→结论：
+    const VIOLATION_PREFIX = `🛑 你上一轮没有输出 <thinking> 和 <mj_variables> 标签！本轮必须严格按「变量更新协议」Step.0~Step.7 输出，每项写明当前值→有无变化→结论。
 
 `
 
