@@ -76,6 +76,50 @@ function handleReindex() {
   }
 }
 
+// ---- 向量搜索演示 ----
+const searchQuery = ref('')
+const searchResults = ref<Array<{ id: string; text: string; score: number; source: string }>>([])
+const searchStages = ref<Array<{ stage: string; count: number; message: string }>>([])
+const searchGraph = ref<{ expanded: boolean; entities: string[] }>({ expanded: false, entities: [] })
+const searchLoading = ref(false)
+
+async function handleSearch() {
+  const q = searchQuery.value.trim()
+  if (!q || !rt.value) return
+  searchLoading.value = true
+  try {
+    const { runRetrievalPipeline } = await import('@/utils/retrieverPipeline')
+    const result = await runRetrievalPipeline(q, rt.value, vs, {
+      round1TopK: 12, round2TopM: 6, round3TopK: 4,
+      queryRewriteEnabled: false, rerankEnabled: false, graphExpandEnabled: true,
+      maxRounds: 3,
+    })
+    searchStages.value = result.stages
+    searchGraph.value = { expanded: result.graphExpanded, entities: result.expandedEntities }
+    searchResults.value = result.results.map(r => {
+      const evt = rt.value?.eventCards.find(e => e.id === r.id)
+      const arc = rt.value?.archiveCards.find(a => a.id === r.id)
+      const card = evt || arc
+      return {
+        id: r.id,
+        text: r.text || card?.summary || '',
+        score: r.score,
+        source: r.source,
+      }
+    })
+  } catch (e: any) {
+    searchStages.value = [{ stage: 'error', count: 0, message: e.message }]
+    searchResults.value = []
+  } finally {
+    searchLoading.value = false
+  }
+}
+
+function handleQuickSearch(q: string) {
+  searchQuery.value = q
+  handleSearch()
+}
+
 // ---- 格式化 ----
 function fmtTime(ts: number) {
   if (!ts) return '-'
@@ -242,21 +286,80 @@ const checkpointList = computed(() => mr?.checkpoints || [])
           </div>
         </div>
       </div>
+
+      <div class="section">
+        <div class="section-title">🔍 实时搜索测试</div>
+        <div class="card">
+          <div class="search-row">
+            <input
+              v-model="searchQuery"
+              class="search-input"
+              placeholder="输入查询关键词，测试向量检索..."
+              @keydown.enter="handleSearch"
+            />
+            <button class="search-btn" @click="handleSearch" :disabled="searchLoading">
+              {{ searchLoading ? '⏳' : '🔍' }}
+            </button>
+          </div>
+          <div class="quick-words">
+            <span class="dim" style="font-size:10px">快捷:</span>
+            <button class="quick-btn" @click="handleQuickSearch('仓库 可疑')">仓库 可疑</button>
+            <button class="quick-btn" @click="handleQuickSearch('巨龙 传说')">巨龙 传说</button>
+            <button class="quick-btn" @click="handleQuickSearch('威尔 认识')">威尔 认识</button>
+            <button class="quick-btn" @click="handleQuickSearch('马克 酒馆')">马克 酒馆</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 流水线阶段 -->
+      <div v-if="searchStages.length > 0" class="section">
+        <div class="section-title">🔄 检索流水线</div>
+        <div class="card">
+          <div class="pipeline-stages">
+            <div v-for="(s, i) in searchStages" :key="i" class="pipe-row">
+              <span class="pipe-badge" :class="s.stage">{{ s.stage }}</span>
+              <span class="pipe-msg">{{ s.message }}</span>
+              <span v-if="s.count > 0" class="pipe-count">{{ s.count }}条</span>
+            </div>
+          </div>
+          <div v-if="searchGraph.expanded" class="graph-banner">
+            🕸️ <strong>关系网扩展:</strong> {{ searchGraph.entities.slice(0, 6).join(' → ') }}
+          </div>
+        </div>
+      </div>
+
+      <!-- 搜索结果 -->
+      <div v-if="searchResults.length > 0" class="section">
+        <div class="section-title">📋 检索结果 ({{ searchResults.length }}条)</div>
+        <div v-for="r in searchResults" :key="r.id" class="card result-card">
+          <div class="result-head">
+            <span class="result-score" :style="{ color: r.score > 3 ? '#4caf50' : r.score > 1 ? '#ffa726' : '#9e9e9e' }">
+              {{ r.score.toFixed(1) }}
+            </span>
+            <span class="result-source" :class="r.source">{{ {keyword:'🔍关键词',vector:'📐TFIDF',graph:'🕸️图谱'}[r.source] || r.source }}</span>
+            <span class="result-id dim">{{ r.id.slice(0, 20) }}</span>
+          </div>
+          <div class="result-text">{{ r.text || '(无摘要)' }}</div>
+        </div>
+      </div>
+
       <div class="section">
         <div class="section-title">检索流水线</div>
         <div class="card">
-          <p style="margin:0 0 8px;font-size:11px;opacity:0.7">
-            关键词检索 + TF-IDF 语义检索 → 合并去重 → (可选 LLM 重排) → 关系网络扩展 → 终选结果
-          </p>
           <div class="pipeline-viz">
-            <span class="pipe-step">🔍 关键词 →</span>
-            <span class="pipe-step">📐 TF-IDF →</span>
-            <span class="pipe-step">🔄 合并去重 →</span>
-            <span class="pipe-step">🧠 LLM重排 →</span>
+            <span class="pipe-step">🔍 关键词</span>
+            <span class="pipe-step">→</span>
+            <span class="pipe-step">📐 TF-IDF</span>
+            <span class="pipe-step">→</span>
+            <span class="pipe-step">🔄 合并去重</span>
+            <span class="pipe-step">→</span>
+            <span class="pipe-step">🧠 重排</span>
+            <span class="pipe-step">→</span>
             <span class="pipe-step">🕸️ 图谱扩展</span>
           </div>
         </div>
       </div>
+
       <div class="section">
         <div class="section-title">vs yijiekkk</div>
         <div class="card">
@@ -264,12 +367,13 @@ const checkpointList = computed(() => mr?.checkpoints || [])
             <tr><td></td><td><strong>wandou</strong></td><td>yijiekkk</td></tr>
             <tr><td>向量化</td><td class="win">TF-IDF 纯本地</td><td>Embedding API</td></tr>
             <tr><td>重排序</td><td class="win">LLM Rerank</td><td>LLM Rerank</td></tr>
-            <tr><td>图谱扩展</td><td class="win">relationNetwork</td><td>Vector + Graph</td></tr>
-            <tr><td>API 依赖</td><td class="win">零依赖(本地) / API(增强)</td><td>Embedding + Chat API</td></tr>
-            <tr><td>中文分词</td><td class="win">字 + 词 + Bigram</td><td>模型依赖</td></tr>
+            <tr><td>图谱扩展</td><td class="win">relationNetwork</td><td>Vector+Graph</td></tr>
+            <tr><td>API依赖</td><td class="win">零(本地) / API(增强)</td><td>Embedding+Chat API</td></tr>
+            <tr><td>中文分词</td><td class="win">字+词+Bigram</td><td>模型依赖</td></tr>
           </table>
         </div>
       </div>
+
       <div class="actions">
         <button @click="handleReindex">🔄 重建索引</button>
         <button @click="refreshVectorStats">🔍 刷新统计</button>
@@ -410,4 +514,58 @@ const checkpointList = computed(() => mr?.checkpoints || [])
 .cmp-table td { padding: 3px 8px; border-bottom: 1px solid var(--theme-border-ice); }
 .cmp-table td:first-child { opacity: 0.5; width: 60px; }
 .cmp-table .win { color: #4caf50; font-weight: 600; }
+
+/* 搜索框 */
+.search-row { display: flex; gap: 6px; margin-bottom: 8px; }
+.search-input {
+  flex: 1; padding: 6px 10px; border-radius: 8px;
+  border: 1px solid var(--theme-border-light); background: rgba(255,255,255,0.5);
+  color: var(--theme-text-main); font-size: 12px; font-family: inherit; outline: none;
+}
+.search-input:focus { border-color: var(--theme-text-accent); }
+.search-btn {
+  width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--theme-border-ice);
+  background: rgba(255,255,255,0.5); cursor: pointer; font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+}
+.search-btn:active { background: var(--theme-text-accent); }
+.quick-words { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.quick-btn {
+  padding: 2px 8px; border-radius: 6px; border: 1px solid var(--theme-border-ice);
+  background: rgba(255,255,255,0.4); color: var(--theme-text-accent);
+  font-size: 10px; cursor: pointer; font-family: inherit;
+}
+.quick-btn:active { background: var(--theme-text-accent); color: #fff; }
+
+/* 流水线阶段 */
+.pipeline-stages { display: flex; flex-direction: column; gap: 4px; }
+.pipe-row { display: flex; align-items: center; gap: 8px; font-size: 10px; }
+.pipe-badge {
+  padding: 1px 6px; border-radius: 4px; font-size: 9px; font-weight: 600; flex-shrink: 0; min-width: 48px; text-align: center;
+}
+.pipe-badge.retrieve { background: rgba(33,150,243,0.12); color: #2196f3; }
+.pipe-badge.rerank { background: rgba(156,39,176,0.12); color: #9c27b0; }
+.pipe-badge.graph { background: rgba(255,152,0,0.12); color: #ff9800; }
+.pipe-badge.rewrite { background: rgba(76,175,80,0.12); color: #4caf50; }
+.pipe-badge.error { background: rgba(244,67,54,0.12); color: #f44336; }
+.pipe-msg { flex: 1; opacity: 0.7; }
+.pipe-count { font-weight: 600; color: var(--theme-text-accent); flex-shrink: 0; }
+.graph-banner {
+  margin-top: 8px; padding: 6px 10px; border-radius: 6px;
+  background: rgba(255,152,0,0.08); border: 1px solid rgba(255,152,0,0.2);
+  font-size: 10px;
+}
+
+/* 搜索结果 */
+.result-card { display: flex; flex-direction: column; gap: 4px; }
+.result-head { display: flex; align-items: center; gap: 8px; }
+.result-score { font-size: 14px; font-weight: 700; min-width: 32px; }
+.result-source {
+  padding: 1px 6px; border-radius: 4px; font-size: 9px; font-weight: 600;
+}
+.result-source.keyword { background: rgba(33,150,243,0.1); color: #2196f3; }
+.result-source.vector { background: rgba(156,39,176,0.1); color: #9c27b0; }
+.result-source.graph { background: rgba(255,152,0,0.1); color: #ff9800; }
+.result-id { font-size: 8px; font-family: monospace; }
+.result-text { font-size: 11px; line-height: 1.4; opacity: 0.8; }
 </style>
