@@ -103,13 +103,17 @@ export function importWorldBook(jsonStr: string): ImportResult & { entries: Worl
     return { success: false, imported: 0, errors: [`JSON 解析失败: ${e.message}`], entries: [] }
   }
 
+  // 支持多种格式：数组 / { entries: [...] } / { scripts: [...] } / 单个对象
   let rawArr: RawWorldBookEntry[]
   if (Array.isArray(data)) {
     rawArr = data
-  } else if (data && typeof data === 'object' && Array.isArray((data as any).entries)) {
-    rawArr = (data as any).entries
+  } else if (data && typeof data === 'object') {
+    const d = data as any
+    if (Array.isArray(d.entries)) rawArr = d.entries
+    else if (Array.isArray(d.scripts)) rawArr = d.scripts
+    else rawArr = [d as RawWorldBookEntry] // 单个对象
   } else {
-    return { success: false, imported: 0, errors: ['JSON 格式错误：期望数组或 { entries: [...] }'], entries: [] }
+    return { success: false, imported: 0, errors: ['JSON 格式错误'], entries: [] }
   }
 
   const entries: WorldBookEntry[] = []
@@ -118,7 +122,42 @@ export function importWorldBook(jsonStr: string): ImportResult & { entries: Worl
     const raw = rawArr[i] as any
     if (!raw || typeof raw !== 'object') { errors.push(`#${i + 1}: 无效`); continue }
 
-    // keys: 兼容 keys / key / keyword / keywords（数组或逗号分隔字符串）
+    // ---- 检测 SillyTavern 脚本条目 ----
+    const hasSetvar = (raw.content || raw.text || '').includes('{{setvar')
+    const isStScript = !!(
+      raw.scriptName ||
+      hasSetvar ||
+      (raw.identifier && raw.content && raw.content.includes('{{setvar'))
+    )
+
+    if (isStScript) {
+      const rawContent = (raw.content || raw.text || '').trim()
+      if (!rawContent) { errors.push(`#${i + 1}: ST 脚本缺少 content`); continue }
+
+      // 剥离 {{setvar::push::\n...\n}} 或 {{setvar::X::...}} 包装
+      let stContent = rawContent
+        .replace(/\{\{setvar::\w+::\s*/gi, '')  // 去掉开头 {{setvar::push::
+        .replace(/\s*\}\}\s*$/g, '')              // 去掉末尾 }}
+        .trim()
+
+      if (!stContent) { errors.push(`#${i + 1}: ST 脚本内容为空`); continue }
+
+      const stName = (raw.name || raw.scriptName || raw.identifier || '').trim()
+      const displayName = stName.replace(/^[⚠️🔴🟡🟢]丨/, '').trim()
+
+      entries.push({
+        id: genId(),
+        keys: [displayName],
+        content: stContent,
+        comment: stName || displayName || 'ST 导入',
+        enabled: raw.enabled !== false && raw.disabled !== true && raw.hidden !== true,
+        priority: 95,
+        position: 'at_constant',
+      })
+      continue
+    }
+
+    // ---- 标准世界书条目解析 ----
     let keys: string[] = []
     if (Array.isArray(raw.keys)) keys = raw.keys
     else if (typeof raw.keys === 'string') keys = raw.keys.split(',').map((s: string) => s.trim())

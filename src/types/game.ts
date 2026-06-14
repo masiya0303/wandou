@@ -9,6 +9,8 @@ export interface ApiConfig {
   model: string
   temperature: number
   maxTokens: number
+  /** top_p 采样 (0-1)，默认不传则由 API 自行决定 */
+  topP?: number
 }
 
 /** 单条消息 */

@@ -37,7 +37,7 @@ export interface VarGroup {
   vars: VarDef[]
 }
 
-/** 传递给 buildVariableProtocol() 的当前状态快照 */
+/** 传递给 buildVariableProtocolFromTemplate() 的当前状态快照 */
 export interface ProtocolStateSnapshot {
   /** 背包物品，格式化字符串，如 "能量电池 ×3 (material), 等离子手枪 ×1 (weapon)" */
   inventory: string
@@ -61,8 +61,6 @@ export interface ProtocolStateSnapshot {
   npcNames: string[]
   /** 在场 NPC ID 列表 — AI 可用 ID 写路径（更稳定，推荐），也可用 name（兼容） */
   npcIds: string[]
-  /** 世界特定的 NPC 属性定义（空数组 = 无世界特定属性） */
-  worldTraits?: import('@/types/world').WorldTrait[]
 }
 
 // ============================================================
@@ -71,8 +69,8 @@ export interface ProtocolStateSnapshot {
 
 const INVENTORY_ITEM_SCHEMA = '{"name":"物品名","quantity":1,"type":"weapon|armor|consumable|material|key|other","description":"简述"}'
 const QUEST_VALUE_SCHEMA = '{"title":"任务名字","questType":"主线|支线|日常|紧急|隐藏","description":"任务内容","reward":"任务奖励","color":"#ff6b6b","status":"active","source":"发布NPC名称|system"}'
-const NPC_VALUE_SCHEMA = '{"name":"NPC名称","role":"身份/职业","personality":"性格特点","appearance":"外貌","background":"背景","relationToPlayer":"与玩家的关系","age":年龄数字,"gender":"性别","characterIntro":"人物介绍","sexualExperience":"性经历","extraAttributes":{"世界特定属性":"值"}}'
-const NPC_IDENTITY_SCHEMA = '{"name":"真名","role":"真实身份","personality":"性格","appearance":"外貌描述","background":"背景故事","relationToPlayer":"与玩家关系","age":年龄数字,"gender":"性别","characterIntro":"人物介绍","sexualExperience":"性经历","extraAttributes":{"世界特定属性":"值"}}'
+const NPC_VALUE_SCHEMA = '{"name":"NPC名称","role":"身份/职业","personality":"性格特点","appearance":"外貌","background":"背景","relationToPlayer":"与玩家的关系","age":年龄数字,"gender":"性别","characterIntro":"人物介绍","sexualExperience":"性经历"}'
+const NPC_IDENTITY_SCHEMA = '{"name":"真名","role":"真实身份","personality":"性格","appearance":"外貌描述","background":"背景故事","relationToPlayer":"与玩家关系","age":年龄数字,"gender":"性别","characterIntro":"人物介绍","sexualExperience":"性经历"}'
 
 export const SYSTEM_VAR_GROUPS: VarGroup[] = [
   {
@@ -448,178 +446,6 @@ export function validateValue(def: VarDef, rawValue: any): ValidationResult {
   return { valid: true }
 }
 
-// ============================================================
-// 协议文本生成
-// ============================================================
-
-/**
- * 生成注入 system prompt 的变量更新协议。
- * 每次构建 context 时动态调用，始终与 registry 同步。
- */
-export function buildVariableProtocol(state?: ProtocolStateSnapshot): string {
-  const lines: string[] = []
-
-  // ---- 当前状态核对表 ----
-  if (state) {
-    lines.push('=== 0) 当前状态 ===')
-    lines.push('背包：' + (state.inventory || '空'))
-    if (state.itemNames && state.itemNames.length > 0) {
-      lines.push('  - 物品名：[' + state.itemNames.join(', ') + ']')
-    }
-    lines.push('任务：' + (state.quests || '无'))
-    if (state.questTitles && state.questTitles.length > 0) {
-      lines.push('  - 任务名：[' + state.questTitles.join(', ') + ']')
-    }
-    lines.push('金币：' + state.gold + ' | 时间：' + state.time + ' | 位置：' + state.location + ' | 天气：' + state.weather)
-    lines.push('在场NPC：' + (state.npcs || '无'))
-    if (state.npcNames && state.npcNames.length > 0) {
-      lines.push('  - NPC名：[' + state.npcNames.join(', ') + ']')
-    }
-    if (state.npcIds && state.npcIds.length > 0) {
-      lines.push('  - NPC的ID：[' + state.npcIds.join(', ') + '] ← ⭐ 推荐用 ID 写路径（改名也不变），name 也兼容')
-    }
-  }
-
-  // ---- 核心约束（合并去重 + 占位值 + 常见错误） ----
-  lines.push('')
-  lines.push('=== 1) 必须强制执行（违反任一条则本轮输出无效） ===')
-  lines.push('')
-  lines.push('【NPC 身份揭示 — 最重要规则】')
-  lines.push('   - ⭐ 强制推荐：用 NPC 的 ID（而非 name）写路径！ID 可从上方"当前状态→NPC的ID"获取。')
-  lines.push('   - ID 稳定不变，改名后路径无需更改。name 路径也兼容但推荐用 ID。')
-  lines.push('   - 若 NPC 当前名为占位名（???/？？？/陌生人/神秘人/不明），玩家得知真名后，')
-  lines.push('     必须使用 /npcs/{id}/identity 一次性更新所有信息：')
-  lines.push('     {"op":"replace","path":"/npcs/{id}/identity","value":{"name":"远坂凛","role":"魔术师","personality":"傲娇果断","appearance":"红色上衣、黑色短裙","background":"远坂家继承人","relationToPlayer":"同盟"}}')
-  lines.push('   - identity 路径会批量更新 name+role+personality+appearance+background+relationToPlayer')
-  lines.push('   - 仅改名字用 /npcs/旧名/name，改名后 NPC 自动记录旧名→新名映射，但你应该立刻用新名写后续操作路径')
-  lines.push('')
-  lines.push('1) 占位值替换：当前位置为"未知区域"/"未知地区"/空，但正文描述了具体地点 → 必须 replace 同步到 /world/location。')
-  lines.push('   每次对话都必须要生成时间，地点，天气')
-  lines.push('   正文末尾的时间/地点/天气行 = 要写入的变量值，禁止"觉得不用更新"。')
-  lines.push('2) 去重铁律（物品/任务/NPC 通用，名称来自上方当前状态列表）：')
-  lines.push('   - 名称已在上方列表中 → 禁止 add，只能 replace（物品叠加quantity / 任务更新status / NPC更新favor等）')
-  lines.push('   - 名称不在列表中且本轮确实新增 → 才可以 add')
-  lines.push('   - NPC 仅提及背包物品/讨论任务 ≠ 获得/接受事件，不产生任何操作')
-  lines.push('   - ⚠️ 金币/银币/铜币/金钱/Gold/Coin 等货币 → 禁止作为物品放入背包！金额变化只能走 /player/gold！')
-  lines.push('3) 任务字段齐全（缺一不可）：title / questType / description / reward / color / source')
-  lines.push('   类型→颜色：主线#ff6b6b | 支线#ffa726 | 日常#66bb6a | 紧急#e53935 | 隐藏#9575cd')
-  lines.push('   source 字段：NPC委托填 NPC 名；系统派发/自动触发填 "system"')
-  lines.push('4) 任务接受判定：NPC列多个任务玩家还没选 → 不添加。玩家说"我接X"/"第一个"→ 只加选中的')
-  lines.push('   - 系统自动派发任务（如到达某地触发、时间到期触发）：source 填 "system"，正常 add')
-  lines.push('5) 时间：每轮强制更新 /world/time，格式 YYYY年 MM月 DD日 HH:MM（补零，如 01月 03日 08:15），禁止倒流')
-  lines.push('6) 路径合法性：仅使用"路径速查"中存在的路径，未注册路径丢弃')
-  lines.push('7) 排除传闻/推测/未发生内容，不写入 patch')
-  lines.push('')
-
-  // ---- 输出格式 + 思维链 ----
-  lines.push('=== 2) 输出格式 ===')
-  lines.push('1) 先输出 <thinking> 详细推理（不低于200字，每个 Step 必须写明当前值+变化过程+结论，禁止只写"无变化"三个字跳过）')
-  lines.push('2) 再输出 <mj_variables> JSON Patch 数组')
-  lines.push('3) 无变化也必须输出 <mj_variables>[]</mj_variables>')
-  lines.push('4) 标签外禁止解释/注释/伪JSON')
-  lines.push('')
-  lines.push('【思维链模板 — 必须按 Step.0~Step.7 逐项检查】')
-  lines.push('<thinking>')
-  lines.push('Step.0 身份揭示检查：')
-  if (state && state.npcNames && state.npcNames.length > 0) {
-    lines.push('  当前在场NPC: ' + state.npcs)
-    lines.push('  其中是否有占位名（???/？？？/陌生人/神秘人）？本轮是否透露了真名？→ 如有，必须输出 identity 更新')
-  } else {
-    lines.push('  当前无NPC在场 → 跳过')
-  }
-  lines.push('')
-  lines.push('Step.1 时间检查（每轮必做）：')
-  lines.push('  当前时间: ' + (state ? state.time : '?') + ' → 流逝 ? 分钟 → 新时间 = ?')
-  lines.push('  （格式 YYYY年 MM月 DD日 HH:MM，月日时分两位补零，禁止倒流）')
-  lines.push('')
-  lines.push('Step.2 位置检查（每轮必做）：')
-  lines.push('  当前位置: ' + (state ? state.location : '?') + ' → 移动了吗？→ region/subRegion/detail = ?')
-  lines.push('')
-  lines.push('Step.3 天气检查（每轮必做）：')
-  lines.push('  当前天气: ' + (state ? state.weather : '?') + ' → 变化了吗？→ 新天气 = ?')
-  lines.push('')
-  lines.push('Step.4 物品变化检查：')
-  lines.push('  当前背包: ' + (state ? state.inventory : '空'))
-  lines.push('  获得新物品？（核对是否已存在→已存在用 replace 叠加 quantity）')
-  lines.push('  消耗/丢弃物品？（用 remove）')
-  lines.push('  ⚠️ 金币只能走 /player/gold，禁止作为物品放入背包！')
-  if (state && state.itemNames && state.itemNames.length > 0) {
-    lines.push('  已持有=[' + state.itemNames.join(', ') + '] → 同名物品禁 add，用 replace 叠加 quantity')
-  }
-  lines.push('')
-  lines.push('Step.5 任务变化检查：')
-  lines.push('  当前任务: ' + (state ? state.quests : '无'))
-  lines.push('  新任务？（NPC列任务但玩家未口头接受→不加；系统派发→source="system" 直接 add）')
-  lines.push('  完成任务？（replace status→completed）')
-  lines.push('  新任务字段必须齐全: title/questType/description/reward/color/source')
-  if (state && state.questTitles && state.questTitles.length > 0) {
-    lines.push('  已有=[' + state.questTitles.join(', ') + '] → 同名禁 add，只 update status')
-  }
-  lines.push('')
-  lines.push('Step.6 NPC变化检查：')
-  lines.push('  当前在场NPC: ' + (state ? state.npcs : '无'))
-  lines.push('  新登场？（add，含 name/role/personality/...）')
-  lines.push('  离场？（replace enabled→false）')
-  lines.push('  好感变化？（replace favor，支持+N/-N）')
-  lines.push('  透露真名/身份？（必须用 identity 批量更新！）')
-  if (state && state.npcIds && state.npcIds.length > 0) {
-    lines.push('  NPC的ID=[' + state.npcIds.join(', ') + '] ← 用这些ID写路径！')
-  }
-  lines.push('')
-  lines.push('Step.7 去重+占位值替换+排除自检：')
-  lines.push('  物品去重: 已存在→replace 非 add？→')
-  lines.push('  任务去重: 已存在→update status 非 add？→')
-  lines.push('  NPC去重: 已在场的只改字段非 add？→')
-  lines.push('  占位值替换: 位置/天气为占位但正文写了→已 replace？→')
-  lines.push('  排除: 传闻/推测/未发生已过滤？→')
-  lines.push('')
-  lines.push('→ 最终操作清单（每个变化一行，无变化输出 []）:')
-  lines.push('</thinking>')
-  lines.push('')
-
-  // ---- 格式示例 ----
-  lines.push('【格式示例（含 NPC 身份揭示 + 任务 source + 系统派发）】')
-  lines.push('<mj_variables>')
-  lines.push('[')
-  lines.push('  {"op":"replace","path":"/world/time","value":"2157年 01月 03日 08:15"},')
-  lines.push('  {"op":"replace","path":"/world/location/region","value":"冬木市"},')
-  lines.push('  {"op":"replace","path":"/world/weather","value":"阴天"},')
-  lines.push('  {"op":"replace","path":"/player/gold","value":"-450"},')
-  lines.push('  {"op":"add","path":"/player/quests/-","value":{"title":"清理鼠患","questType":"支线","description":"村长委托清理东区鼠患","reward":"500G","color":"#ffa726","status":"active","source":"村长"}},')
-  lines.push('  {"op":"replace","path":"/npcs/npc-abc123/identity","value":{"name":"远坂凛","role":"魔术师","personality":"傲娇果断","appearance":"红色上衣、黑色短裙","background":"远坂家继承人","relationToPlayer":"同盟"}}')
-  lines.push(']')
-  lines.push('</mj_variables>')
-  lines.push('  ← identity 一次性更新 NPC 所有字段（name+role+personality+appearance+background+relationToPlayer），比逐字段 replace 好')
-  lines.push('  ← source 字段标注任务来源：NPC委托=发布者名，系统派发="system"')
-  lines.push('')
-
-  // ---- 路径速查 ----
-  lines.push('=== 3) 路径速查 ===')
-  for (const group of SYSTEM_VAR_GROUPS) {
-    lines.push('【' + group.label + '路径】')
-    for (const v of group.vars) {
-      const parts: string[] = [v.path]
-      if (v.incremental) parts.push('(+N/-N)')
-      if (v.valueSchema) parts.push('value: ' + v.valueSchema)
-      if (v.description) parts.push('- ' + v.description)
-      lines.push(parts.join(' '))
-    }
-    lines.push('')
-  }
-
-  // ---- 末尾自查（近因效应） ----
-  lines.push('⚠️ 【输出前速查 — 全部为"是"才能结束】')
-  lines.push('□ 是不是输出了 <thinking> 和 <mj_variables> 两个标签？')
-  if (state) {
-    lines.push('□ 物品/任务/NPC：已在列表中的用 replace 而非 add？')
-    lines.push('□ 正文末尾的时间/地点/天气同步到了 /world/time、/world/location、/world/weather？')
-    lines.push('□ 有占位名 NPC 身份揭示时 → 用了 /npcs/旧名/identity（批量更新）而非仅 /name？')
-  }
-  lines.push('□ 任务字段齐全（含 source）？时间已补零？路径都在速查表中？')
-  lines.push('')
-
-  return lines.join('\n')
-}
 
 // ============================================================
 // Prompt 模板系统（yijiekkk-style）
@@ -641,7 +467,6 @@ export interface PromptTemplateVars {
   '{{VARIABLE_PATHS}}': string   // 可用路径速查表
   '{{THINKING_HINTS}}': string   // 思维链中动态提示（NPC/任务/物品去重）
   '{{IDENTITY_CHECKLIST}}': string // 身份揭示自检
-  '{{WORLD_TRAITS}}': string     // 世界特定 NPC 属性要求
 }
 
 /** 默认变量协议模板 */
@@ -650,9 +475,6 @@ export const DEFAULT_PROTOCOL_TEMPLATE = `=== 0) 当前状态 ===
 任务：{{QUESTS}}
 金币：{{GOLD}} | 时间：{{TIME}} | 位置：{{LOCATION}} | 天气：{{WEATHER}}
 在场NPC：{{NPCS}}
-
-=== 0.5) 世界特定 NPC 属性 ===
-{{WORLD_TRAITS}}
 
 === 1) 必须强制执行（违反任一条则本轮输出无效） ===
 
@@ -722,11 +544,11 @@ Step.5 任务变化检查：
 
 Step.6 NPC变化检查：
   当前在场NPC: {{NPCS}}
-  新NPC登场？（add，须含 name/role/personality/appearance/background/relationToPlayer）
+  新NPC登场？（add，含 name/role/personality/appearance/background/characterIntro/age/gender/relationToPlayer/sexualExperience 全部字段，不可省略）
   NPC离场？（replace enabled → false）
   好感度变化？（replace favor，支持增量 +N/-N）
   NPC本轮透露了真名/真实身份？
-    → 必须用 identity 批量更新（name+role+personality+appearance+background+relationToPlayer 一次搞定）
+    → 必须用 identity 批量更新（name+role+personality+appearance+background+characterIntro+age+gender+relationToPlayer+sexualExperience 一次搞定）
     → 不要只改 name 一个字段！
 
 Step.7 去重 + 占位值替换 + 排除自检（必须逐条回答）:
@@ -850,20 +672,6 @@ export function buildTemplateVars(state?: ProtocolStateSnapshot): Partial<Prompt
   identLines.push('  □ 正文的时间/地点/天气同步到了变量？')
   const identCheck = identLines.join('\n')
 
-  // 世界特定 NPC 属性
-  let worldTraitsText = '本世界未定义特定 NPC 属性。'
-  if (state.worldTraits && state.worldTraits.length > 0) {
-    const traitLines = state.worldTraits.map(t =>
-      `  - ${t.label}（key: "${t.key}"）：${t.placeholder}`
-    )
-    worldTraitsText = [
-      '创建 NPC 时必须在 extraAttributes 中填入以下字段：',
-      ...traitLines,
-      '',
-      '示例 extraAttributes 值：{' + state.worldTraits.map(t => `"${t.key}":"（填写）"`).join(', ') + '}',
-    ].join('\n')
-  }
-
   return {
     '{{STATUS}}': [
       '背包：' + (state.inventory || '空'),
@@ -881,12 +689,11 @@ export function buildTemplateVars(state?: ProtocolStateSnapshot): Partial<Prompt
     '{{VARIABLE_PATHS}}': pathLines.join('\n'),
     '{{THINKING_HINTS}}': thinkHints.join('\n'),
     '{{IDENTITY_CHECKLIST}}': identCheck,
-    '{{WORLD_TRAITS}}': worldTraitsText,
   }
 }
 
 /**
- * 从模板构建变量协议（替代 buildVariableProtocol）。
+ * 从模板构建变量协议。
  * 如果 DLC 提供了自定义模板，优先使用。
  * @param state 当前状态快照
  * @param customTemplate 可选的自定义模板（DLC/世界覆盖）

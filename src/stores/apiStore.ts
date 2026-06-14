@@ -12,6 +12,7 @@ export const DEFAULT_API: ApiConfig = {
   model: 'deepseek-chat',
   temperature: 0.8,
   maxTokens: 8192,
+  topP: 0.9,
 }
 
 export const DEFAULT_PROMPT = `
@@ -36,7 +37,7 @@ export const DEFAULT_PROMPT = `
 - 【变量追踪 — 最重要规则，优先级高于一切】
   ⚠️ 你的每条回复末尾都必须包含 <thinking> 和 <mj_variables> 标签。这是硬性要求，不可省略。
   格式：先输出 <thinking>详细推理</thinking>，再输出 <mj_variables>[操作数组]</mj_variables>。
-  ⚠️ <thinking> 用精简格式（100-200字足够），逐行检查时间/位置/天气/物品/任务/NPC，最后给出操作清单。
+  ⚠️ <thinking> 必须详细推理（不低于200字），按 Step.0~Step.7 逐项检查：身份揭示→时间→位置→天气→物品→任务→NPC→去重+占位值替换+排除自检，每项写明当前值→变化过程→结论，禁止只写"无变化"三个字跳过。
   ⚠️ 除非是玩家还没说任何话的首轮问候，否则每轮至少输出一个操作——时间几乎每轮都在前进！不要偷懒输出 []。
 
   🔴 占位值替换：当前状态中的"未知区域""未知地区"等是占位符，不是真实状态。

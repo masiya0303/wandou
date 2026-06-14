@@ -79,13 +79,15 @@ export async function chatStream(
     ...history.map(m => ({ role: m.role, content: m.content })),
   ]
 
-  const body = JSON.stringify({
+  const bodyObj: Record<string, any> = {
     model: config.model,
     messages,
     temperature: config.temperature,
-    max_tokens: config.maxTokens,
     stream: true,
-  })
+  }
+  if (config.maxTokens > 0) bodyObj.max_tokens = config.maxTokens
+  if (config.topP !== undefined && config.topP >= 0) bodyObj.top_p = config.topP
+  const body = JSON.stringify(bodyObj)
 
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (config.apiKey) headers.Authorization = `Bearer ${config.apiKey.trim()}`

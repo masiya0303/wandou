@@ -18,13 +18,6 @@ export interface InventoryItem {
   icon?: string
 }
 
-/** 世界特定 NPC 属性定义 */
-export interface WorldTrait {
-  key: string        // 字段名（如 "异能"）
-  label: string     // 显示名（如 "异能 · 觉醒能力"）
-  placeholder: string // AI 生成时的提示（如 "觉醒的超能力名称与效果"）
-}
-
 /** 任务 */
 export interface Quest {
   id: string
@@ -59,8 +52,6 @@ export interface World {
   worldBookEnabled: boolean
   /** 状态同步系统：世界状态 */
   stateData?: WorldSaveState
-  /** 世界特定 NPC 属性定义（如异能世界→异能/异能等级，咒术世界→咒术/咒力等级） */
-  worldTraits?: WorldTrait[]
 }
 
 export interface WorldSaveState {
@@ -76,5 +67,7 @@ export interface WorldSaveState {
 export interface WorldMeta {
   id: string; name: string; description: string; characterName: string
   messageCount: number; createdAt: number; updatedAt: number
+  /** 存档槽位列表（从 storage 动态读取） */
+  slots?: { name: string; timestamp: number; preview: string }[]
 }
 

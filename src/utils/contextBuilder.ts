@@ -12,7 +12,7 @@ import { buildFirewallBlock } from '@/utils/roleFirewall'
 import { buildFullStateSnapshot } from '@/utils/stateEngine'
 import { scanAndCollect, extractRecentText } from '@/utils/worldBookEngine'
 import { scanNpcs } from '@/utils/npcEngine'
-import { buildVariableProtocolFromTemplate, buildVariableProtocol, type ProtocolStateSnapshot } from '@/utils/variableRegistry'
+import { buildVariableProtocolFromTemplate, type ProtocolStateSnapshot } from '@/utils/variableRegistry'
 import type { GameMessage } from '@/types/game'
 
 function buildStateJsonSnapshot(): string {
@@ -152,7 +152,6 @@ export function buildContextParts(opts: ContextOpts): string[] {
         : '无',
       npcNames: ns.npcs.filter(n => ns.getNpcCategory(n) !== '离场').map(n => n.name),
       npcIds: ns.npcs.filter(n => ns.getNpcCategory(n) !== '离场').map(n => n.id),
-      worldTraits: ws.currentWorldTraits || [],
     }
 
     // 检测占位名 NPC —— 如果存在，在协议前方插入醒目警告

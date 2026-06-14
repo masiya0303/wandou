@@ -37,6 +37,36 @@ function json<T>(key: string, fallback: T): T {
 }
 function save(key: string, val: unknown) { try { localStorage.setItem(key, JSON.stringify(val)) } catch {} }
 
+/** 槽位读取 */
+function slotGet(id: string, slotName: string): { world: World; apiConfig: any } | null {
+  return json(PREFIX + id + '_slot_' + slotName, null)
+}
+/** 槽位写入 */
+function slotSave(id: string, slotName: string, data: { world: World; apiConfig: any }) {
+  save(PREFIX + id + '_slot_' + slotName, data)
+}
+/** 列出某个世界的所有槽位 */
+function slotList(id: string): { name: string; timestamp: number; preview: string }[] {
+  const prefix = PREFIX + id + '_slot_'
+  const slots: { name: string; timestamp: number; preview: string }[] = []
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i)
+    if (!k?.startsWith(prefix)) continue
+    const slotName = k.slice(prefix.length)
+    const v = localStorage.getItem(k)
+    if (!v) continue
+    try {
+      const data = JSON.parse(v)
+      const ts = data?.world?.updatedAt || 0
+      const charName = data?.world?.character?.name || ''
+      const msgCount = data?.world?.messages?.length || 0
+      slots.push({ name: slotName, timestamp: ts, preview: `${charName} · ${msgCount}轮` })
+    } catch { /* skip broken */ }
+  }
+  slots.sort((a, b) => b.timestamp - a.timestamp)
+  return slots
+}
+
 export const storage = {
   // ---- 世界列表 ----
   getWorldList(): WorldMeta[] { return json(WORLD_LIST, []) },
@@ -46,16 +76,28 @@ export const storage = {
   getGlobalWorldBook(): WorldBookEntry[] { return json(GLOBAL_WB, []) },
   saveGlobalWorldBook(entries: WorldBookEntry[]) { save(GLOBAL_WB, entries) },
 
-  // ---- 单个世界 ----
+  // ---- 单个世界（向下兼容：优先读槽位，不存在则读旧 key） ----
+  // slot 方法在此之下定义，通过闭包引用 storage 对象（避免 this 绑定问题）
   getWorld(id: string): { world: World; apiConfig: any } | null {
+    const autoSlot = slotGet(id, 'auto')
+    if (autoSlot) return autoSlot
     return json(PREFIX + id, null)
   },
   saveWorld(id: string, data: { world: World; apiConfig: any }) {
-    save(PREFIX + id, data)
+    slotSave(id, 'auto', data)
   },
   deleteWorld(id: string) {
+    for (const s of slotList(id)) {
+      try { localStorage.removeItem(PREFIX + id + '_slot_' + s.name) } catch {}
+    }
     try { localStorage.removeItem(PREFIX + id) } catch {}
   },
+
+  // ---- 多存档槽位 ----
+  getWorldSlot(id: string, slotName: string) { return slotGet(id, slotName) },
+  saveWorldSlot(id: string, slotName: string, data: { world: World; apiConfig: any }) { slotSave(id, slotName, data) },
+  deleteWorldSlot(id: string, slotName: string) { try { localStorage.removeItem(PREFIX + id + '_slot_' + slotName) } catch {} },
+  listSlots(id: string) { return slotList(id) },
 
   // ---- 全局配置 ----
   getConfig<T>(key: string, fallback: T): T { return json(PREFIX + key, fallback) },

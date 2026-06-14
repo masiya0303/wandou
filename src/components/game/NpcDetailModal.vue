@@ -2,19 +2,15 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useNpcStore } from '@/stores/npcStore'
-import { useWorldStore } from '@/stores/worldStore'
 import type { NpcEntry, NpcCategory } from '@/types/npc'
-import type { WorldTrait } from '@/types/world'
 
 const props = defineProps<{ npc: NpcEntry }>()
 const emit = defineEmits<{ close: [] }>()
 
 const npcStore = useNpcStore()
-const ws = useWorldStore()
 
 const category = computed(() => npcStore.getNpcCategory(props.npc))
 const recentChronicles = computed(() => npcStore.getRecentChronicles(props.npc.id, 10))
-const worldTraits = computed<WorldTrait[]>(() => ws.currentWorldTraits || [])
 
 const CAT_LABEL: Record<string, string> = { '在场': '🟢 在场', '离场': '💤 离场', '重点': '⭐ 重点角色' }
 const FAVOR_LABEL = (f: number) => {

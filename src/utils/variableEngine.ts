@@ -7,7 +7,7 @@
 // 变量定义见 variableRegistry.ts — 本文件只做解析 + 路由。
 // ============================================================
 
-import type { InventoryItem, Quest } from '@/types/world'
+import type { Quest } from '@/types/world'
 import { usePlayerStore } from '@/stores/playerStore'
 import { useNpcStore } from '@/stores/npcStore'
 import { useStateStore } from '@/stores/stateStore'
@@ -17,14 +17,6 @@ import {
   validateValue,
   type VarDef,
 } from './variableRegistry'
-
-/** 是否使用统一状态树路径（新架构）来应用变量操作 */
-let _useUnifiedPatch = false
-
-/** 切换变量应用模式。true=统一状态树+递归Patch, false=逐Store路由（默认） */
-export function setUseUnifiedPatch(flag: boolean) {
-  _useUnifiedPatch = flag
-}
 
 // ============================================================
 // 公共类型
@@ -264,30 +256,6 @@ export function resolveIncremental(current: number, raw: any): number {
     if (/^\d+(\.\d+)?$/.test(s)) return Number(s)
   }
   return cur
-}
-
-// ============================================================
-// 类型规范化
-// ============================================================
-
-// 注意：此函数与 playerStore.normalizeType 保持同步。
-// 实际物品写入统一走 playerStore.applyOps()，那里的 normalizeType 是唯一生效的。
-// 此导出仅为外部调用者提供便捷的类型推断。
-export function normalizeItemType(raw: string): InventoryItem['type'] {
-  const t = String(raw || '').toLowerCase()
-  if (t.includes('武器') || t.includes('weapon') || t.includes('兵器') ||
-      t.includes('装备') || t.includes('equipment')) return 'weapon'
-  if (t.includes('防具') || t.includes('铠甲') || t.includes('armor') || t.includes('盔甲') ||
-      t.includes('头盔') || t.includes('盾') || t.includes('护甲') || t.includes('披风') ||
-      t.includes('helmet') || t.includes('shield')) return 'armor'
-  if (t.includes('消耗') || t.includes('药') || t.includes('consumable') || t.includes('potion') ||
-      t.includes('食物') || t.includes('food') || t.includes('卷轴') || t.includes('scroll')) return 'consumable'
-  if (t.includes('材料') || t.includes('material') || t.includes('零件') || t.includes('矿石') ||
-      t.includes('component') || t.includes('资源') || t.includes('布料') || t.includes('木材') ||
-      t.includes('herb') || t.includes('ore') || t.includes('gem') || t.includes('crystal')) return 'material'
-  if (t.includes('关键') || t.includes('key') || t.includes('钥匙') || t.includes('通行证') ||
-      t.includes('令牌') || t.includes('信物') || t.includes('地图') || t.includes('map')) return 'key'
-  return 'other'
 }
 
 // ============================================================
@@ -868,102 +836,6 @@ function applyNpcOp(
 }
 
 // ============================================================
-// 通用递归 RFC 6902 Patch（yijiekkk-style）
-// 在任何 JSON 树上执行 add/replace/remove 操作，不依赖具体 Store
-// ============================================================
-
-export interface RfcOperation {
-  op: 'add' | 'replace' | 'remove'
-  path: string
-  value?: any
-}
-
-/**
- * 在任意 JSON 对象上批量执行 RFC 6902 操作。
- * 路径自动补全中间节点。增量字符串 "+N"/"-N" 自动计算。
- */
-export function applyRfcPatch(state: Record<string, any>, operations: RfcOperation[]): string[] {
-  const results: string[] = []
-  for (const op of operations) {
-    if (!op.path || !op.op) continue
-    const pathParts = op.path.split('/').filter(Boolean)
-    if (pathParts.length === 0) continue
-    const result = applyNodeOp(state, pathParts, op.op, op.value)
-    if (result) results.push(result)
-  }
-  return results
-}
-
-/**
- * 在单个节点上递归执行操作。
- * 支持增量字符串（"+N"/"-N"），自动创建中间对象/数组。
- */
-function applyNodeOp(
-  node: any,
-  pathParts: string[],
-  op: string,
-  value: any,
-): string | null {
-  if (pathParts.length === 0) return null
-  const key = pathParts[0]
-
-  // ---- 叶子节点 ----
-  if (pathParts.length === 1) {
-    switch (op) {
-      case 'add': {
-        if (Array.isArray(node)) {
-          if (key === '-') {
-            node.push(value)
-          } else {
-            const idx = parseInt(key)
-            if (!isNaN(idx) && idx >= 0) node.splice(idx, 0, value)
-          }
-        } else {
-          node[key] = value
-        }
-        return null
-      }
-      case 'replace': {
-        const current = node[key]
-        // 增量字符串 "+N" / "-N"
-        if (typeof value === 'string' && /^[+-]\d+(\.\d+)?$/.test(value)) {
-          const curNum = typeof current === 'number' ? current : 0
-          const newNum = curNum + Number(value)
-          node[key] = newNum
-          const diff = newNum - curNum
-          if (diff !== 0) return `Δ ${key}: ${diff > 0 ? '+' : ''}${diff}`
-          return null
-        }
-        // 直接替换
-        node[key] = value
-        return null
-      }
-      case 'remove': {
-        if (Array.isArray(node)) {
-          const idx = parseInt(key)
-          if (!isNaN(idx) && idx >= 0 && idx < node.length) {
-            const removed = node.splice(idx, 1)[0]
-            return removed?.name ? `🗑️ ${removed.name}` : null
-          }
-        } else {
-          delete node[key]
-        }
-        return null
-      }
-    }
-    return null
-  }
-
-  // ---- 递归：自动创建中间节点 ----
-  if (node[key] === undefined || node[key] === null) {
-    const nextKey = pathParts[1]
-    node[key] = (nextKey === '-' || !isNaN(parseInt(nextKey))) ? [] : {}
-  }
-
-  return applyNodeOp(node[key], pathParts.slice(1), op, value)
-}
-
-// ============================================================
 // 主入口
 // ============================================================
 
@@ -1025,8 +897,6 @@ export function processVariableUpdates(text: string): VarResult {
     const ops = parseOperations(payload)
     console.warn('[wandou] 解析到', ops.length, '个操作:', ops.map(o => `${o.op} ${o.path}`).join(', ') || '(无)')
     for (const op of ops) {
-      // 优先走逐 Store 路由（保持向后兼容），
-      // _useUnifiedPatch=true 时走统一状态树路径
       const result = applyOperation(op)
       opsApplied.push({ op, result })
       if (result) summaries.push(result)

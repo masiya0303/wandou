@@ -11,40 +11,10 @@ import { useWorldBookStore } from '@/stores/worldBookStore'
 import type { WorldBookEntry } from '@/types/worldBook'
 import { importWorldBook } from '@/utils/worldBookEngine'
 import { importNpcJson } from '@/utils/npcEngine'
-import type { WorldTrait } from '@/types/world'
+import { bus } from '@/utils/events'
 import type { NpcEntry } from '@/types/npc'
 import NpcDetailModal from '@/components/game/NpcDetailModal.vue'
 import ToggleSwitch from '@/components/ToggleSwitch.vue'
-
-// ---- 世界特征 NPC 属性模板 ----
-const WORLD_TRAIT_TEMPLATES: Record<string, WorldTrait[]> = {
-  '无': [],
-  '异能世界': [
-    { key: '异能', label: '异能·觉醒能力', placeholder: '觉醒的超能力名称与效果' },
-    { key: '异能等级', label: '异能等级', placeholder: 'S/A/B/C/D 级' },
-  ],
-  '咒术世界': [
-    { key: '咒术', label: '咒术', placeholder: '持有的咒术名称与效果' },
-    { key: '咒力等级', label: '咒力等级', placeholder: '特级/一级/二级/三级/四级' },
-    { key: '术式类型', label: '术式类型', placeholder: '如 领域展开/反转术式/束缚术式 等' },
-  ],
-  '现代世界': [
-    { key: '特长', label: '特长', placeholder: '专业技能或商业天赋' },
-    { key: '资源', label: '资源', placeholder: '经济资源/人脉网络/信息渠道' },
-  ],
-  '修仙世界': [
-    { key: '灵根', label: '灵根属性', placeholder: '金/木/水/火/土/变异灵根' },
-    { key: '修为', label: '修为境界', placeholder: '练气/筑基/金丹/元婴/化神' },
-    { key: '功法', label: '主修功法', placeholder: '修炼的功法名称与品阶' },
-  ],
-  '科幻世界': [
-    { key: '义体', label: '义体改造', placeholder: '赛博义体的类型与功能' },
-    { key: '黑客等级', label: '黑客等级', placeholder: '网络入侵能力等级' },
-  ],
-}
-
-const selectedTemplate = ref('无')
-const editTraits = ref<WorldTrait[]>([])
 
 // NPC 详情弹窗
 const detailNpc = ref<NpcEntry | null>(null)
@@ -79,31 +49,8 @@ watch(() => route.params.id, async (newId) => {
     await game.enterWorld(newId as string)
     editName.value = world.worldName
     editDesc.value = world.worldDescription
-    editTraits.value = [...(world.currentWorldTraits || [])]
   }
 })
-
-// ---- 世界特征编辑 ----
-function applyTemplate(name: string) {
-  selectedTemplate.value = name
-  editTraits.value = (WORLD_TRAIT_TEMPLATES[name] || []).map(t => ({ ...t }))
-}
-
-function addTrait() {
-  editTraits.value.push({ key: '', label: '', placeholder: '' })
-}
-
-function removeTrait(idx: number) {
-  editTraits.value.splice(idx, 1)
-}
-
-function saveTraits() {
-  editTraits.value = editTraits.value.filter(t => t.key.trim())
-  world.currentWorldTraits = [...editTraits.value]
-  saving.value = true
-  game.syncSave()
-  setTimeout(() => { saving.value = false }, 500)
-}
 
 // ---- 角色卡导入 ----
 const pcJson = ref(''); const showPc = ref(false); const pcFi = ref<HTMLInputElement | null>(null)
@@ -198,7 +145,16 @@ function importNpcs() {
 function importWb() {
   if (!wbJson.value.trim()) return
   const r = importWorldBook(wbJson.value)
-  if (r.success && r.entries.length > 0) wbs.addWorldEntries(r.entries)
+  if (r.success && r.entries.length > 0) {
+    wbs.addWorldEntries(r.entries)
+    const disabled = r.entries.filter(e => !e.enabled).length
+    let msg = `📖 导入 ${r.entries.length} 条世界书`
+    if (disabled > 0) msg += `（${disabled} 条已禁用，可手动开启）`
+    error.value = '' // 清除旧错误
+    bus.emit('inventory:toast', { message: msg })
+  } else {
+    error.value = r.errors.length > 0 ? r.errors.join('；') : '导入失败，未识别到有效条目'
+  }
   wbJson.value = ''; showWb.value = false
 }
 
@@ -304,25 +260,6 @@ async function goBack() {
         <div class="sec-title"><span class="cn">📝 世界信息</span><span class="en">WORLD INFO</span></div>
         <input v-model="editName" class="fi" placeholder="世界名称" />
         <textarea v-model="editDesc" class="fi ta" rows="2" placeholder="世界描述..."></textarea>
-      </div>
-
-      <div class="sec">
-        <div class="sec-title"><span class="cn">🔮 NPC 属性配置</span><span class="en">NPC TRAITS</span></div>
-        <div class="trait-row">
-          <span class="trait-label">预设模板：</span>
-          <select v-model="selectedTemplate" @change="applyTemplate(($event.target as HTMLSelectElement).value)" class="trait-select">
-            <option v-for="(_, name) in WORLD_TRAIT_TEMPLATES" :key="name" :value="name">{{ name }}</option>
-          </select>
-          <button class="act" @click="saveTraits" :disabled="saving">💾 保存属性</button>
-        </div>
-        <div v-if="editTraits.length === 0 && !saving" class="empty">未配置世界特定属性 — NPC 只使用基础信息字段</div>
-        <div v-for="(t, idx) in editTraits" :key="idx" class="trait-entry">
-          <input v-model="t.key" class="trait-fi" placeholder="字段 key (如 异能)" />
-          <input v-model="t.label" class="trait-fi" placeholder="显示名 (如 异能·觉醒能力)" />
-          <input v-model="t.placeholder" class="trait-fi" placeholder="AI 提示 (如 超能力名称)" />
-          <button class="edel" @click="removeTrait(idx)">✕</button>
-        </div>
-        <button v-if="editTraits.length > 0" class="act" @click="addTrait" style="margin-top:6px">+ 添加属性</button>
       </div>
 
       <div class="sec">
@@ -468,11 +405,5 @@ async function goBack() {
 .btn-exp:active { background: var(--theme-border-ice); }
 .btn-del { padding: 6px 16px; border: 1px solid #ecc; border-radius: 9999px; background: transparent; color: #c88; font-size: 12px; cursor: pointer; font-family: inherit; }
 .btn-del:active { background: rgba(200,80,80,0.1); }
-/* traits */
-.trait-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
-.trait-label { font-size: 12px; color: var(--theme-text-main); opacity: 0.7; }
-.trait-select { padding: 4px 10px; border: 1px solid var(--theme-border-ice); border-radius: 8px; font-size: 12px; font-family: inherit; color: var(--theme-text-main); background: rgba(255,255,255,0.7); }
-.trait-entry { display: flex; gap: 4px; margin-bottom: 4px; align-items: center; }
-.trait-fi { flex: 1; min-width: 0; padding: 4px 8px; border: 1px solid var(--theme-border-ice); border-radius: 6px; font-size: 11px; font-family: inherit; color: var(--theme-text-main); background: rgba(255,255,255,0.7); }
-.trait-fi::placeholder { color: var(--theme-text-main); opacity: 0.3; }
+
 </style>

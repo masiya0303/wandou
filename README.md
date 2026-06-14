@@ -1,5 +1,75 @@
-# Vue 3 + TypeScript + Vite
+# 豌豆 (wandou) · 地球online
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+**AI 文字冒险游戏** — 基于 Vue 3 + TypeScript + Vite 构建的单页应用，连接任意 OpenAI 兼容 API（如 DeepSeek、OpenAI 等）进行交互式文字角色扮演。
 
-Learn more about the recommended Project Setup and IDE Support in the [Vue Docs TypeScript Guide](https://vuejs.org/guide/typescript/overview.html#project-setup).
+## ✨ 核心功能
+
+- **多世界管理** — 创建多个独立世界，每个世界有独立设定、角色、NPC 和存档
+- **AI 驱动的叙事** — 通过 LLM API 流式生成沉浸式文字冒险体验
+- **智能变量追踪** — AI 自动维护时间、地点、天气、物品、任务、NPC 好感等变量状态
+- **背包系统** — 自动提取物品变更，同名同类型堆叠，伪物品过滤，事务性操作
+- **任务系统** — 主线/支线/日常/紧急/隐藏任务，支持 NPC 委托
+- **NPC 角色书** — 人物分类（在场/离场/重点）、好感度里程碑、身份揭示、改名历史
+- **世界书 (Lorebook)** — 关键词触发的背景设定注入，支持全局 + 世界两级
+- **对话摘要** — 超过阈值自动压缩历史，防止上下文溢出
+- **多存档位** — 手动存档 + 30 秒自动存档，支持回退
+- **扩展系统** — 可安装扩展脚本，自定义游戏逻辑
+- **主题自定义** — 支持导入 CSS 自定义主题，内置粉色默认主题
+- **移动端适配** — 触摸友好的 UI，毛玻璃风格
+
+## 🚀 快速开始
+
+```bash
+# 安装依赖
+pnpm install
+
+# 启动开发服务器
+pnpm dev
+
+# 构建生产版本
+pnpm build
+
+# 运行测试
+pnpm test
+```
+
+## ⚙️ 配置
+
+启动后进入 **设置面板** 配置 API：
+
+| 配置项 | 说明 | 默认值 |
+|--------|------|--------|
+| Base URL | API 地址 | `https://api.deepseek.com` |
+| API Key | 你的 API 密钥 | - |
+| Model | 模型名称 | `deepseek-chat` |
+| Temperature | 生成温度 (0-2) | `0.8` |
+| Max Tokens | 最大输出 token | `8192` |
+
+内置 DeepSeek 预设，也兼容任何 OpenAI 格式的 API（如 OpenAI、Groq、Ollama 等）。
+
+## 🎮 玩法
+
+1. **创建世界** — 设定世界观、背景故事
+2. **创建角色** — 设置玩家角色的姓名、年龄、背景
+3. **开始冒险** — AI 作为叙事助手，根据你的输入推动剧情
+4. **变量自动追踪** — AI 会自动在回复末尾输出结构化标签 (`<mj_variables>`)，系统解析后更新背包、任务、时间、地点等状态
+5. **存档管理** — 随时手动存档或依赖自动存档
+
+## 🏗️ 技术架构
+
+```
+src/
+├── components/     # Vue 组件（按页面分目录）
+│   ├── home/       # 主菜单
+│   ├── world/      # 世界列表 & 详情
+│   ├── game/       # 游戏主界面 (ChatPanel, InputBar, GameHud)
+│   └── settings/   # 设置面板 & 世界书管理
+├── stores/         # Pinia 状态管理（11 个模块）
+├── utils/          # 引擎层（API、变量、记忆、世界书、正则等）
+├── types/          # TypeScript 类型定义
+└── router/         # Vue Router 配置
+```
+
+## 📄 许可
+
+MIT

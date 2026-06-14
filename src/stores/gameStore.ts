@@ -41,7 +41,8 @@ export const useGameStore = defineStore('game', () => {
   }
 
   // ---- 进入世界 ----
-  async function enterWorld(id: string): Promise<boolean> {
+  /** 共享恢复逻辑（enterWorld + loadFromSlot 公用） */
+  function enterWorldWithData(id: string, data: { world: World; apiConfig: any }): boolean {
     const ws = useWorldStore()
     const ps = usePlayerStore()
     const ns = useNpcStore()
@@ -49,21 +50,16 @@ export const useGameStore = defineStore('game', () => {
     const cs = useChatStore()
     const ss = useStateStore()
 
-    const data = storage.getWorld(id)
-    if (!data?.world) return false
-
     const w = data.world
     ws.currentWorldId = w.id
     ws.worldName = w.name
     ws.worldDescription = w.description
-    ws.currentWorldTraits = w.worldTraits || []
     ps.restore({ character: w.character, inventory: w.inventory || [], quests: w.quests || [] })
     ns.restore(w.npcs || [])
     cs.restore(w.messages || [])
     wbs.restoreWorldBook({ entries: w.worldBook || [], enabled: w.worldBookEnabled !== false })
     if (w.stateData) ss.restore(w.stateData)
 
-    // 恢复该世界关联的 API 配置
     if (data.apiConfig?.apiKey) {
       const api = useApiStore()
       api.updateApiConfig(data.apiConfig)
@@ -73,8 +69,14 @@ export const useGameStore = defineStore('game', () => {
     return true
   }
 
+  async function enterWorld(id: string): Promise<boolean> {
+    const data = storage.getWorld(id)
+    if (!data?.world) return false
+    return enterWorldWithData(id, data)
+  }
+
   // ---- 持久化 ----
-  function syncSave() {
+  function syncSave(slotName: string = 'auto') {
     const ws = useWorldStore()
     if (!ws.currentWorldId) return
 
@@ -98,17 +100,31 @@ export const useGameStore = defineStore('game', () => {
       messages: cs.messages,
       worldBook: wbs.worldBook,
       worldBookEnabled: wbs.worldBookEnabled,
-      worldTraits: ws.currentWorldTraits,
       stateData: ss.snapshot(),
     }
 
-    storage.saveWorld(ws.currentWorldId, { world, apiConfig: api.apiConfig })
+    storage.saveWorldSlot(ws.currentWorldId, slotName, { world, apiConfig: api.apiConfig })
 
-    // 更新列表 meta
+    // 更新列表 meta（含槽位）
     ws.updateMeta(ws.currentWorldId, ps.character.name, cs.messages.length)
+    const meta = ws.worldList.find(w => w.id === ws.currentWorldId)
+    if (meta) {
+      meta.slots = storage.listSlots(ws.currentWorldId)
+      storage.saveWorldList(ws.worldList)
+    }
   }
 
-  async function autoSave() { syncSave() }
+  function autoSave() { syncSave('auto') }
+
+  // ---- 多存档位 ----
+  function saveToSlot(slotName: string) { syncSave(slotName) }
+  async function loadFromSlot(slotName: string, id: string): Promise<boolean> {
+    const data = storage.getWorldSlot(id, slotName)
+    if (!data) return false
+    return enterWorldWithData(id, data)
+  }
+  function deleteSlot(id: string, slotName: string) { storage.deleteWorldSlot(id, slotName) }
+  function listSlots(id: string) { return storage.listSlots(id) }
 
   function hasSave() {
     const ws = useWorldStore()
@@ -176,5 +192,6 @@ export const useGameStore = defineStore('game', () => {
     initStore, enterWorld, startPlaying,
     syncSave, autoSave, hasSave, resetWorldData,
     exportWorld, exportAllWorlds,
+    saveToSlot, loadFromSlot, deleteSlot, listSlots,
   }
 })

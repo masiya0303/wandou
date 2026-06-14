@@ -16,6 +16,7 @@ import { processVariableUpdates } from '@/utils/variableEngine'
 import { extractMemories, commitMemories } from '@/utils/memoryEngine'
 import { extractItems } from '@/utils/itemExtractor'
 import { extractQuests } from '@/utils/questExtractor'
+import { shouldSummarize, summarizeHistory } from '@/utils/summarizer'
 import { usePlayerStore } from './playerStore'
 import { useStateStore } from './stateStore'
 import { bus } from '@/utils/events'
@@ -56,6 +57,10 @@ export const useChatStore = defineStore('chat', () => {
   const memorySyncEnabled = ref(true)
   /** 是否启用 API 物品提取回退（当 AI 没输出标签时） */
   const itemExtractionFallback = ref(true)
+  /** 是否启用对话历史自动摘要 */
+  const summaryEnabled = ref(true)
+  /** 摘要触发阈值（消息条数，0=不启用） */
+  const summaryThreshold = ref(40)
 
   const messageCount = computed(() => messages.value.length)
 
@@ -89,6 +94,14 @@ export const useChatStore = defineStore('chat', () => {
 
     const api = useApiStore()
     const player = usePlayerStore()
+    // ---- 摘要检查（在添加用户消息前，防止新版被摘要吞掉） ----
+    if (summaryEnabled.value && shouldSummarize(messages.value, summaryThreshold.value)) {
+      const result = await summarizeHistory(messages.value, api.apiConfig)
+      if (result) {
+        messages.value = result
+      }
+    }
+
     error.value = ''
     _lastInput = userInput.trim()
 
@@ -120,9 +133,8 @@ export const useChatStore = defineStore('chat', () => {
       : BASE_SUFFIX
 
     // 构建消息数组时，最后一条用户消息追加强制输出格式
-    const messagesToSend = messages.value.slice(0, -1).map((m, i) => {
-      if (i === messages.value.length - 2) {
-        // 这是刚添加的用户消息 — 追加输出格式要求
+    const messagesToSend = messages.value.slice(0, -1).map((m, i, arr) => {
+      if (i === arr.length - 1) {
         return { ...m, content: m.content + MANDATORY_OUTPUT_SUFFIX }
       }
       return m
@@ -155,19 +167,22 @@ export const useChatStore = defineStore('chat', () => {
       )
 
       if (aiMsg.content) {
-        const rawText = aiMsg.content
-
-        // ---- 提取 AI 思考过程（存入 thinkingMap + 控制台输出） ----
+        let rawText = aiMsg.content
         let _savedThinking = ''
-        const thinkMatch = rawText.match(/<thinking\b[^>]*>([\s\S]*?)<\/thinking\s*>/i)
-        if (thinkMatch) {
-          const thinkContent = thinkMatch[1].trim()
-          thinkingMap.value[aiMsg.id] = thinkContent
+
+        // ---- 提取 AI 思考过程（含自动重试） ----
+        function extractThinking(text: string): string | null {
+          const m = text.match(/<thinking\b[^>]*>([\s\S]*?)<\/thinking\s*>/i)
+          return m ? m[1].trim() : null
+        }
+
+        let thinkContent = extractThinking(rawText)
+        if (thinkContent) {
           _savedThinking = thinkContent
+          thinkingMap.value[aiMsg.id] = thinkContent
           console.warn('[wandou] 🧠 AI 思考过程:\n' + thinkContent)
-          _thinkingRetryCount = 0 // 成功则重置
+          _thinkingRetryCount = 0
         } else {
-          // thinking 缺失 — 自动重试
           console.error('[wandou] 🚨 AI 本轮未输出 <thinking> 标签！')
           console.error('[wandou] 完整回复末尾100字符:', rawText.slice(-100))
           bus.emit('chat:thinking_missing', aiMsg.id)
@@ -176,21 +191,43 @@ export const useChatStore = defineStore('chat', () => {
             _thinkingRetryCount++
             console.warn(`[wandou] 🔄 自动重试 (${_thinkingRetryCount}/${MAX_THINKING_RETRIES})...`)
 
-            // 移除最后一条 AI 消息和对应的用户消息
-            const aiIdx = messages.value.findIndex(m => m.id === aiMsg.id)
-            if (aiIdx > 0) {
-              let userIdx = -1
-              for (let i = aiIdx - 1; i >= 0; i--) {
-                if (messages.value[i].role === 'user') { userIdx = i; break }
+            // 构建重试用消息（不改 messages 数组）
+            const retryMessages = messages.value.slice(0, -1).map((m, i, arr) => {
+              if (i === arr.length - 1) {
+                return { ...m, content: m.content + VIOLATION_PREFIX + BASE_SUFFIX }
               }
-              messages.value.splice(aiIdx)   // 移除 AI 及之后
-              if (userIdx >= 0) messages.value.splice(userIdx, 1)  // 移除 user
+              return m
+            })
+            const retryContextParts = buildContextParts({
+              stateSyncEnabled: stateSyncEnabled.value,
+              memorySyncEnabled: memorySyncEnabled.value,
+              messages: messages.value,
+            })
+            const retrySystemPrompt = api.buildFullSystemPrompt(retryContextParts)
+
+            let retryContent = ''
+            try {
+              retryContent = await chatStream(
+                api.apiConfig,
+                retrySystemPrompt,
+                retryMessages,
+                (token) => { retryContent += token; aiMsg.content = retryContent; bus.emit('chat:generation_token', token, aiMsg) },
+              )
+            } catch (retryErr: any) {
+              console.warn('[wandou] 重试被中止，保留第一轮正文:', retryErr?.message || retryErr?.name)
+              if (!retryContent) retryContent = rawText // 恢复第一轮内容
             }
-            isGenerating.value = false
-            // 重发 — 加更强的后缀
-            const lastInput = _lastInput
-            _lastInput = '' // 防止 retry() 检查
-            return await sendMessage(lastInput)
+
+            // 重试完成：重新提取 thinking
+            rawText = retryContent
+            aiMsg.content = retryContent
+            const retryThink = extractThinking(retryContent)
+            if (retryThink) {
+              _savedThinking = retryThink
+              thinkingMap.value[aiMsg.id] = retryThink
+              console.warn('[wandou] 🧠 AI 思考过程:\n' + retryThink)
+            }
+            _thinkingRetryCount = 0
           } else {
             console.error('[wandou] ❌ thinking 缺失已达最大重试次数，放弃自动重试')
             _thinkingRetryCount = 0
@@ -251,8 +288,9 @@ export const useChatStore = defineStore('chat', () => {
           aiMsg.content += '\n<!--thinking:' + JSON.stringify(_savedThinking) + '-->'
         }
 
-        // ---- API 物品提取（异步，回退路径） ----
-        if (stateSyncEnabled.value && itemExtractionFallback.value) {
+        // ---- API 物品提取（异步，回退路径 — 仅 mj_variables 缺失时启用） ----
+        const hasMjVars = /<mj_variables\b/i.test(rawText)
+        if (stateSyncEnabled.value && itemExtractionFallback.value && !hasMjVars) {
           extractItems(api.apiConfig, messages.value.slice(0, -1), rawText)
             .then(items => {
               if (items.length === 0) return
@@ -278,8 +316,8 @@ export const useChatStore = defineStore('chat', () => {
             })
         }
 
-        // ---- API 任务提取（异步，回退路径） ----
-        if (stateSyncEnabled.value && itemExtractionFallback.value) {
+        // ---- API 任务提取（异步，回退路径 — 仅 mj_variables 缺失时启用） ----
+        if (stateSyncEnabled.value && itemExtractionFallback.value && !hasMjVars) {
           extractQuests(api.apiConfig, _lastInput, rawText, player.quests.map(q => q.title))
             .then(quests => {
               if (quests.length === 0) return
@@ -526,6 +564,7 @@ export const useChatStore = defineStore('chat', () => {
     messages, isGenerating, error, errorType, messageCount,
     thinkingMap,
     stateSyncEnabled, memorySyncEnabled, itemExtractionFallback,
+    summaryEnabled, summaryThreshold,
     addMessage, clearMessages, sendMessage, retry, dismissError,
     regenerate, stopGeneration, snapshot, restore,
   }

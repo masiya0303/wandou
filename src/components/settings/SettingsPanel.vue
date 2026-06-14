@@ -29,6 +29,7 @@ const editBaseUrl = ref(api.apiConfig.baseUrl)
 const editModel = ref(api.apiConfig.model)
 const editTemperature = ref(api.apiConfig.temperature)
 const editMaxTokens = ref(api.apiConfig.maxTokens)
+const editTopP = ref(api.apiConfig.topP ?? 0.9)
 const editSystemPrompt = ref(api.systemPrompt)
 const saved = ref(false)
 
@@ -53,6 +54,7 @@ function handleApplyPreset(name: string) {
   editModel.value = api.apiConfig.model
   editTemperature.value = api.apiConfig.temperature
   editMaxTokens.value = api.apiConfig.maxTokens
+  editTopP.value = api.apiConfig.topP ?? 0.9
   editSystemPrompt.value = api.systemPrompt
   saved.value = true; setTimeout(() => saved.value = false, 2000)
 }
@@ -67,7 +69,7 @@ const themeJson = ref('')
 const themeMsg = ref('')
 
 function handleSave() {
-  api.updateApiConfig({ apiKey: editApiKey.value, baseUrl: editBaseUrl.value, model: editModel.value, temperature: editTemperature.value, maxTokens: editMaxTokens.value })
+  api.updateApiConfig({ apiKey: editApiKey.value, baseUrl: editBaseUrl.value, model: editModel.value, temperature: editTemperature.value, maxTokens: editMaxTokens.value, topP: editTopP.value })
   api.updateSystemPrompt(editSystemPrompt.value)
   saved.value = true; setTimeout(() => saved.value = false, 2000)
 }
@@ -166,8 +168,9 @@ const EXPAND_TITLES: Record<string, string> = { api:'🔌 API 配置', prompt:'�
           <div class="fg"><label>模型 <span class="l-en">MODEL</span></label><input v-model="editModel" type="text" class="fi" /></div>
           <div class="fg-row">
             <div class="fg" style="flex:1"><label>温度 {{ editTemperature }}</label><input v-model.number="editTemperature" type="range" min="0" max="2" step="0.1" style="width:100%;accent-color:var(--theme-text-accent)" /></div>
-            <div class="fg" style="flex:1"><label>Max Tokens</label><input v-model.number="editMaxTokens" type="number" class="fi" min="256" max="128000" /></div>
+            <div class="fg" style="flex:1"><label>Top P {{ editTopP }}</label><input v-model.number="editTopP" type="range" min="0" max="1" step="0.05" style="width:100%;accent-color:var(--theme-text-accent)" /></div>
           </div>
+          <div class="fg" style="margin-top:6px"><label>Max Tokens</label><input v-model.number="editMaxTokens" type="number" class="fi" min="256" max="128000" /></div>
           <button class="sub-save" @click="handleSave">保存</button>
 
           <div style="margin-top:18px; padding-top:16px; border-top:1px solid var(--theme-border-ice)">

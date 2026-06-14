@@ -78,7 +78,6 @@ function switchTab(t: typeof tab.value) {
     tab.value = 'chat'
   } else {
     tab.value = t
-    // 打开背包时清除红点
     if (t === 'inventory') {
       player.clearNewItemBadge()
     }
